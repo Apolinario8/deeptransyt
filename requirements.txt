@@ -1,0 +1,8 @@
+Bio
+biopython
+fair_esm==2.0.0
+numpy==2.0.1
+pandas==2.2.2
+pytorch_lightning==2.2.5
+tensorflow==2.17.0
+torch==2.3.0
