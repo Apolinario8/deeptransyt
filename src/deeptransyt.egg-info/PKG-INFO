@@ -1,17 +1,17 @@
 Metadata-Version: 2.1
 Name: deeptransyt
-Version: 0.0.3
+Version: 0.0.4
 Summary: Transporters annotation using LLM's
 Home-page: https://github.com/Apolinario8/deeptransyt
 Author: Gonçalo Apolinário Cardoso
 Author-email: goncalocardoso2016@gmail.com
 Description-Content-Type: text/markdown
-Requires-Dist: Bio
-Requires-Dist: biopython
+Requires-Dist: Bio==1.7.1
+Requires-Dist: biopython==1.84
 Requires-Dist: fair_esm==2.0.0
-Requires-Dist: numpy==2.0.1
+Requires-Dist: numpy==1.26.4
 Requires-Dist: pandas==2.2.2
-Requires-Dist: pytorch_lightning==2.2.5
+Requires-Dist: pytorch_lightning==2.3.3
 Requires-Dist: tensorflow==2.17.0
 Requires-Dist: torch==2.3.0
 

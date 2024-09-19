@@ -1,12 +1,14 @@
 import os
 import argparse
+import json
 import logging
 from .sequence_processing import load_sequences, preprocess_sequences, create_encodings
 from .make_predictions import (
     predict_binary,
     predict_family,
     predict_subfamily,
-    predict_metabolic_important
+    predict_metabolic_important,
+    predict_substrate_classes
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,15 +26,29 @@ def main(input_file: str, output_dir: str, preprocess: bool = True, gpu: int = 2
     df_family_predictions = predict_family(encodings, labels)
     df_subfamily_predictions = predict_subfamily(encodings, labels)
     df_metabolic_predictions = predict_metabolic_important(encodings, labels)
+    df_susbtrate_classes_predictions = predict_substrate_classes(encodings, labels)
+
 
     df_merged = df_binary_predictions.merge(df_family_predictions, on='Accession', how='left')
     df_merged = df_merged.merge(df_subfamily_predictions, on='Accession', how='left')
     df_merged = df_merged.merge(df_metabolic_predictions, on='Accession', how='left')
+    df_merged = df_merged.merge(df_susbtrate_classes_predictions, on='Accession', how='left')
+
+    #adding family descriptions correspoding to collumn family>12
+    with open('mappings/family_descriptions.json', 'r') as f:
+        family_descriptions = json.load(f)
+
+    df_merged['Family_Description'] = df_merged['PredictedFamily_>12'].map(family_descriptions)
+    
+    #saving only positives rows in the df
+    df_final = df_merged[df_merged['Accession'].isin(labels)]
 
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "final_predictions.csv")
-    df_merged.to_csv(output_file, index=False)
+    df_final.to_csv(output_file, index=False)
     logging.info(f"All predictions saved to {output_file}")
+
+    return df_final
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the prediction pipeline")

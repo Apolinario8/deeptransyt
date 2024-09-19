@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
-from .DNN import DNN, DNN_binary
+from .DNN import DNN, DNN_binary, DNN_weight
 import json
 from .auxiliary_functions import MODEL_DIR, MAPPING_DIR
 import os
@@ -137,3 +137,30 @@ def predict_metabolic_important(transporter_encodings: np.ndarray, transporter_a
     df_new_predictions = pd.DataFrame({'Accession': transporter_accessions, 'Predicted_newdataset': predicted_labels_names})
 
     return df_new_predictions
+
+
+def predict_substrate_classes(transporter_encodings: np.ndarray, transporter_accessions: list) -> pd.DataFrame:     
+    
+    model_path = 'models/substrate_classes.ckpt'
+    label_map_path = 'mappings/mapping_susbtrate_classes.json'
+
+    pos_weight = torch.tensor([0.2224, 0.0389, 0.0757, 0.3443, 0.0426, 0.0761, 0.2000], dtype=torch.float32)
+    
+    substrate_classes_model = DNN_weight.load_from_checkpoint(checkpoint_path=model_path, num_classes=7, weight=pos_weight)
+    device = torch.device('cpu')
+    substrate_classes_model = substrate_classes_model.to(device)
+    substrate_classes_model.eval()
+
+    transporter_tensor = torch.tensor(transporter_encodings, dtype=torch.float32)
+    with torch.no_grad():
+        transporter_predictions = substrate_classes_model(transporter_tensor)
+    predicted_labels = transporter_predictions.argmax(dim=1).numpy()
+
+    with open(label_map_path, 'r') as f:
+        label_map = json.load(f)
+
+    predicted_labels_names = [label_map[str(label)] for label in predicted_labels]
+
+    df_substrate_classes = pd.DataFrame({'Accession': transporter_accessions, 'Class_substrate': predicted_labels_names})
+
+    return df_substrate_classes

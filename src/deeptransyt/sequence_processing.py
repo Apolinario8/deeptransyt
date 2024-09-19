@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import pandas as pd
 from Bio import SeqIO
+import logging
 import esm
 from .auxiliary_functions import remove_ambiguous_aa
 
@@ -61,7 +62,7 @@ def preprocess_sequences(df: pd.DataFrame,  max_length: int = 600) -> pd.DataFra
     return df
 
 
-def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'esm2_t33_650M_UR50D', batch_size: int = 8, output_dir: str = 'encodings_genome', preprocess: bool = True) -> tuple:
+def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'esm2_t33_650M_UR50D', batch_size: int = 8, output_dir: str = 'encodings_genome', gpu: int=2, preprocess: bool = True) -> tuple:
 
     if preprocess:
         df = preprocess_sequences(df)
@@ -82,7 +83,7 @@ def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'e
     model, alphabet = esm.pretrained.load_model_and_alphabet(model_name)
     batch_converter = alphabet.get_batch_converter()
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device(f'cuda:{gpu}' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
 
     labels = df["ID"].tolist()
@@ -108,7 +109,7 @@ def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'e
         for i, tokens_len in enumerate(batch_lens):
             sequence_representations.append(token_representations[i, 1:tokens_len - 1].mean(0).cpu())     # Generate per-sequence representations
     total_time = round(time.time() - start_time)
-    print("Time taken for encodings generation:", total_time, "seconds")
+    logging.info(f"Time taken for encodings generation: {total_time} seconds")
 
     os.makedirs(output_dir, exist_ok=True)
     input_file_base = os.path.splitext(os.path.basename(input_filename))[0]
