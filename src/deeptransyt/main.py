@@ -2,46 +2,53 @@ import os
 import argparse
 import json
 import logging
+import numpy as np
 from .sequence_processing import load_sequences, preprocess_sequences, create_encodings
 from .make_predictions import (
     predict_binary,
     predict_family,
-    predict_subfamily,
-    predict_metabolic_important,
+   # predict_subfamily,
+   # predict_metabolic_important,
     predict_substrate_classes
 )
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MAPPING_DIR = os.path.join(BASE_DIR, 'mappings')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main(input_file: str, output_dir: str, preprocess: bool = True, gpu: int = 2) :
     df_sequences = load_sequences(input_file)
     
     if preprocess:
-        logging.info("Preprocessing sequences and creating encodings")
+        logging.info("Preprocessing sequences and creating embeddings")
         df_sequences = preprocess_sequences(df_sequences)
 
-    encodings, labels = create_encodings(df_sequences, input_file)
+    encodings, accessions = create_encodings(df_sequences, input_file)
 
-    df_binary_predictions, binary_labels = predict_binary(encodings, labels)
-    df_family_predictions = predict_family(encodings, labels)
-    df_subfamily_predictions = predict_subfamily(encodings, labels)
-    df_metabolic_predictions = predict_metabolic_important(encodings, labels)
-    df_susbtrate_classes_predictions = predict_substrate_classes(encodings, labels)
+    df_binary_predictions, binary_labels = predict_binary(encodings, accessions)
 
+    transporter_indices = np.where(binary_labels == 1)[0]
+    transporter_encodings = np.array(encodings)[transporter_indices]
+    transporter_accessions = np.array(accessions)[transporter_indices]
+
+    df_family_predictions = predict_family(transporter_encodings, transporter_accessions)
+    #df_subfamily_predictions = predict_subfamily(transporter_encodings, transporter_accessions)
+    #df_metabolic_predictions = predict_metabolic_important(transporter_encodings, transporter_accessions)
+    df_susbtrate_classes_predictions = predict_substrate_classes(transporter_encodings, transporter_accessions)
 
     df_merged = df_binary_predictions.merge(df_family_predictions, on='Accession', how='left')
-    df_merged = df_merged.merge(df_subfamily_predictions, on='Accession', how='left')
-    df_merged = df_merged.merge(df_metabolic_predictions, on='Accession', how='left')
+    #df_merged = df_merged.merge(df_subfamily_predictions, on='Accession', how='left')
+    #df_merged = df_merged.merge(df_metabolic_predictions, on='Accession', how='left')
     df_merged = df_merged.merge(df_susbtrate_classes_predictions, on='Accession', how='left')
 
     #adding family descriptions correspoding to collumn family>12
-    with open('mappings/family_descriptions.json', 'r') as f:
+    with open(os.path.join(MAPPING_DIR, 'family_descriptions.json'), 'r') as f:
         family_descriptions = json.load(f)
 
     df_merged['Family_Description'] = df_merged['PredictedFamily_>12'].map(family_descriptions)
     
     #saving only positives rows in the df
-    df_final = df_merged[df_merged['Accession'].isin(labels)]
+    df_final = df_merged[df_merged['Accession'].isin(transporter_accessions)]
 
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "final_predictions.csv")
