@@ -3,6 +3,7 @@ import argparse
 import json
 import logging
 import numpy as np
+import requests
 from .sequence_processing import load_sequences, preprocess_sequences, create_encodings
 from .make_predictions import (
     predict_binary,
@@ -13,7 +14,42 @@ from .make_predictions import (
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MAPPING_DIR = os.path.join(BASE_DIR, 'mappings')
+MODEL_DIR = os.path.join(BASE_DIR, 'models_mappings')
+BASE_URL = 'https://github.com/Apolinario8/deeptransyt/releases/download/v0.0.1/'
+
+FILE_URLS = {
+    'mapping_family12.json': BASE_URL + 'mapping_family12.json',
+    'DNN_allclasses.ckpt': BASE_URL + 'DNN_allclasses.ckpt',
+    'family_DNN_no9_12.ckpt': BASE_URL + 'family_DNN_no9_12.ckpt',
+    'family_descriptions.json': BASE_URL + 'family_descriptions.json',
+    'mapping_susbtrate_classes.json': BASE_URL + 'mapping_susbtrate_classes.json',
+    'substrate_classes.ckpt': BASE_URL + 'substrate_classes.ckpt'
+}
+
+def download_file(file_name, url):
+    file_path = os.path.join(MODEL_DIR, file_name)
+    
+    if not os.path.exists(file_path):
+        print(f"Downloading {file_name} from {url}...")
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(file_path, 'wb') as f:
+                f.write(response.content)
+            print(f"{file_name} downloaded successfully!")
+        else:
+            raise RuntimeError(f"Failed to download {file_name}. Status code: {response.status_code}")
+    else:
+        print(f"{file_name} already exists. Skipping download.")
+
+def download_all_files():
+    if not os.path.exists(MODEL_DIR):
+        os.makedirs(MODEL_DIR)
+    
+    for file_name, url in FILE_URLS.items():
+        download_file(file_name, url)
+
+download_all_files()
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main(input_file: str, output_dir: str, preprocess: bool = True, gpu: int = 2) :
@@ -42,7 +78,7 @@ def main(input_file: str, output_dir: str, preprocess: bool = True, gpu: int = 2
     df_merged = df_merged.merge(df_susbtrate_classes_predictions, on='Accession', how='left')
 
     #adding family descriptions correspoding to collumn family>12
-    with open(os.path.join(MAPPING_DIR, 'family_descriptions.json'), 'r') as f:
+    with open(os.path.join(MODEL_DIR, 'family_descriptions.json'), 'r') as f:
         family_descriptions = json.load(f)
 
     df_merged['Family_Description'] = df_merged['PredictedFamily_>12'].map(family_descriptions)
