@@ -124,10 +124,15 @@ def predict_family(transporter_encodings: np.ndarray, transporter_accessions: li
 
 def predict_family_subfamily(transporter_encodings: np.ndarray, transporter_accessions: list) -> pd.DataFrame:
 
-    with open('family_subfamily_mappings.json', 'r') as f:
+    label_map_path = os.path.join(MODEL_DIR, 'family_subfamily_mappings.json')
+    label_map_path1 = os.path.join(MODEL_DIR, 'family_to_subfamily_map.json')
+    with open(label_map_path, 'r') as f:
         mappings = json.load(f)
         family_mapping = mappings['family_mapping']
-        subfamily_mapping = mappings['subfamily_mapping']
+        subfamily_mapping = mappings['subfamily_mapping'] 
+
+    with open(label_map_path1, 'r') as f:
+        family_to_subfamily_map = json.load(f)
 
     num_family_classes = len(family_mapping)
     num_subfamily_classes = len(subfamily_mapping)
@@ -162,12 +167,23 @@ def predict_family_subfamily(transporter_encodings: np.ndarray, transporter_acce
             predicted_families.append(original_family)
             family_confidences.append(fam_pred_confidence)
 
-            sub_pred_label = torch.argmax(sub_prob[i]).item()
-            sub_pred_confidence = sub_prob[i][sub_pred_label].item()
+            valid_subfamilies = family_to_subfamily_map.get(str(fam_pred_label), [])
 
-            original_subfamily = subfamily_mapping.get(str(sub_pred_label), "Unknown Subfamily")
-            predicted_subfamilies.append(original_subfamily)
-            subfamily_confidences.append(sub_pred_confidence)
+            if valid_subfamilies:
+                filtered_sub_pred = torch.full_like(sub_pred[i], float('-inf'))
+                filtered_sub_pred[valid_subfamilies] = sub_pred[i][valid_subfamilies]
+
+                filtered_sub_prob = F.softmax(filtered_sub_pred, dim=0)
+
+                sub_pred_label = torch.argmax(filtered_sub_prob).item()
+                sub_pred_confidence = filtered_sub_prob[sub_pred_label].item()
+
+                original_subfamily = subfamily_mapping.get(str(sub_pred_label), "Unknown Subfamily")
+                predicted_subfamilies.append(original_subfamily)
+                subfamily_confidences.append(sub_pred_confidence)
+            else:
+                predicted_subfamilies.append("Unknown Subfamily")
+                subfamily_confidences.append(0.0)
 
     df_predictions = pd.DataFrame({
         'Accession': transporter_accessions,

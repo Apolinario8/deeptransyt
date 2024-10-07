@@ -1,1 +1,3 @@
-Accession,Binary_Predictions,PredictedFamily_>12,Class_substrate,Family_Description
+Accession,Binary_Predictions,PredictedFamily_>12,PredictedFamily,FamilyConfidence,PredictedSubfamily,SubfamilyConfidence,Class_substrate,Family_Description
+b0010,0.96216595,2.A.96,2.A.96,0.9982280135154724,2.A.96.1,1.0,Other,The Acetate Uptake Transporter (AceTr) Family
+b2683,0.9547079,2.A.7,3.D.1,0.25588637590408325,3.D.1.4,0.6628819704055786,Electron,The Drug/Metabolite Transporter (DMT) Superfamily

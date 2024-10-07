@@ -223,10 +223,10 @@ class DNN_weight(pl.LightningModule):
         return [optimizer], [lr_scheduler]
     
 class HierarchicalDNN(pl.LightningModule):
-    def __init__(self, input_size, num_families, num_subfamilies):
+    def __init__(self, num_families, num_subfamilies):
         super(HierarchicalDNN, self).__init__()
 
-        self.fc1 = nn.Linear(input_size, 1024)
+        self.fc1 = nn.Linear(1280, 1024)
         self.bn1 = nn.BatchNorm1d(1024)
         self.dropout1 = nn.Dropout(0.3)
         

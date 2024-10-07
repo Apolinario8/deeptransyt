@@ -62,7 +62,7 @@ def preprocess_sequences(df: pd.DataFrame,  max_length: int = 600) -> pd.DataFra
     return df
 
 
-def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'esm2_t33_650M_UR50D', batch_size: int = 8, output_dir: str = 'encodings_genome', gpu: int=2, preprocess: bool = True) -> tuple:
+def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'esm2_t33_650M_UR50D', batch_size: int = 8, output_dir: str = 'data', gpu: int=2, preprocess: bool = True) -> tuple:
 
     if preprocess:
         df = preprocess_sequences(df)
@@ -113,9 +113,11 @@ def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'e
 
     os.makedirs(output_dir, exist_ok=True)
     input_file_base = os.path.splitext(os.path.basename(input_filename))[0]
-    encodings_filename = f"{output_dir}/{input_file_base}_encodings.npy"
+    encodings_filename = f"{output_dir}/{input_file_base}_embeddings.npy"
+    labels_filename = f"{output_dir}/{input_file_base}_accessions.npy"
 
-    np.save(encodings_filename, np.array(sequence_representations))  
+    np.save(encodings_filename, np.array(sequence_representations)) 
+    np.save(labels_filename, np.array(labels))  
 
     # Clean up to free memory
     del model, alphabet, batch_converter, token_representations, results

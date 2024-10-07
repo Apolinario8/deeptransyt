@@ -9,7 +9,8 @@ from .make_predictions import (
     predict_binary,
     predict_family,
    # predict_subfamily,
-   # predict_metabolic_important,
+   # predict_metabolic_important, 
+    predict_family_subfamily,
     predict_substrate_classes
 )
 
@@ -23,7 +24,9 @@ FILE_URLS = {
     'family_DNN_no9_12.ckpt': BASE_URL + 'family_DNN_no9_12.ckpt',
     'family_descriptions.json': BASE_URL + 'family_descriptions.json',
     'mapping_susbtrate_classes.json': BASE_URL + 'mapping_susbtrate_classes.json',
-    'substrate_classes.ckpt': BASE_URL + 'substrate_classes.ckpt'
+    'substrate_classes.ckpt': BASE_URL + 'substrate_classes.ckpt',
+    'family_subfamily_10.ckpt': BASE_URL + 'family_subfamily_10.ckpt',
+    'family_subfamily_mappings.json': BASE_URL + 'family_subfamily_mappings.json'
 }
 
 def download_file(file_name, url):
@@ -52,14 +55,21 @@ download_all_files()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def main(input_file: str, output_dir: str, preprocess: bool = True, gpu: int = 2) :
-    df_sequences = load_sequences(input_file)
+def main(input_file: str=None, output_dir: str = "results", preprocess: bool = True, gpu: int = 2, 
+         embeddings_file: str = None, labels_file: str = None):
     
-    if preprocess:
-        logging.info("Preprocessing sequences and creating embeddings")
-        df_sequences = preprocess_sequences(df_sequences)
+    if embeddings_file and labels_file:
+        logging.info("Loading existing encodings and labels")
+        encodings = np.load(embeddings_file)
+        accessions = np.load(labels_file)
+    else:
+        df_sequences = load_sequences(input_file)
 
-    encodings, accessions = create_encodings(df_sequences, input_file)
+        if preprocess:
+            logging.info("Preprocessing sequences and creating embeddings")
+            df_sequences = preprocess_sequences(df_sequences)
+
+        encodings, accessions = create_encodings(df_sequences, input_file, gpu=gpu)
 
     df_binary_predictions, binary_labels = predict_binary(encodings, accessions)
 
@@ -70,11 +80,13 @@ def main(input_file: str, output_dir: str, preprocess: bool = True, gpu: int = 2
     df_family_predictions = predict_family(transporter_encodings, transporter_accessions)
     #df_subfamily_predictions = predict_subfamily(transporter_encodings, transporter_accessions)
     #df_metabolic_predictions = predict_metabolic_important(transporter_encodings, transporter_accessions)
+    df_family_subfamily_predictions = predict_family_subfamily(transporter_encodings, transporter_accessions)
     df_susbtrate_classes_predictions = predict_substrate_classes(transporter_encodings, transporter_accessions)
 
     df_merged = df_binary_predictions.merge(df_family_predictions, on='Accession', how='left')
     #df_merged = df_merged.merge(df_subfamily_predictions, on='Accession', how='left')
     #df_merged = df_merged.merge(df_metabolic_predictions, on='Accession', how='left')
+    df_merged = df_merged.merge(df_family_subfamily_predictions, on='Accession', how='left')
     df_merged = df_merged.merge(df_susbtrate_classes_predictions, on='Accession', how='left')
 
     #adding family descriptions correspoding to collumn family>12
@@ -95,10 +107,12 @@ def main(input_file: str, output_dir: str, preprocess: bool = True, gpu: int = 2
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the prediction pipeline")
-    parser.add_argument('--input_dir', type=str, required=True, help='Input file path')
+    parser.add_argument('--input_dir', type=str, required=True, help='Path to fasta containing sequences (genome)')
     parser.add_argument('--output_dir', type=str, required=True, help='Output directory path')
     parser.add_argument('--gpu', type=int, default=2, help='GPU index to use')
     parser.add_argument('--nopreprocess', action='store_false', dest='preprocess', help='Disable preprocessing of sequences')
+    parser.add_argument('--embeddings_file', type=str, help='Path to existing embeddings file (optional)')
+    parser.add_argument('--labels_file', type=str, help='Path to existing labels file (optional)')
     args = parser.parse_args()
 
-    main(args.input_dir, args.output_dir, args.gpu, args.preprocess)
+    main(args.input_dir, args.output_dir, args.preprocess, args.gpu, args.embeddings_file, args.labels_file)
