@@ -1,3 +1,7 @@
 # deeptransyt
 
-![alt text](https://github.com/[username]/[reponame]/blob/[branch]/annotation_tool_workflow.png?raw=true)
+![alt text](https://github.com/Apolinario8/deeptransyt/blob/main/annotation_tool_workflow.png?raw=true)
+
+
+
+
