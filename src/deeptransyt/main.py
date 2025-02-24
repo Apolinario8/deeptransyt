@@ -4,14 +4,15 @@ import json
 import logging
 import numpy as np
 import requests
-from .sequence_processing import load_sequences, preprocess_sequences, create_encodings
+from .sequence_processing import load_sequences, preprocess_sequences, create_embeddings
 from .make_predictions import (
     predict_binary,
     predict_family,
    # predict_subfamily,
    # predict_metabolic_important, 
     predict_family_subfamily,
-    predict_substrate_classes
+    predict_substrate_classes,
+    predict_SPOT
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -56,7 +57,7 @@ download_all_files()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main(input_file: str=None, output_dir: str = "results", preprocess: bool = True, gpu: int = 2, 
-         embeddings_file: str = None, labels_file: str = None):
+         embeddings_file: str = None, labels_file: str = None, organism_id: str = None, substrates_inchis: list = None):
     
     if embeddings_file and labels_file:
         logging.info("Loading existing encodings and labels")
@@ -69,13 +70,15 @@ def main(input_file: str=None, output_dir: str = "results", preprocess: bool = T
             logging.info("Preprocessing sequences and creating embeddings")
             df_sequences = preprocess_sequences(df_sequences)
 
-        encodings, accessions = create_encodings(df_sequences, input_file, gpu=gpu)
+        encodings, accessions = create_embeddings(df_sequences, input_file, gpu=gpu)
 
     df_binary_predictions, binary_labels = predict_binary(encodings, accessions)
 
     transporter_indices = np.where(binary_labels == 1)[0]
     transporter_encodings = np.array(encodings)[transporter_indices]
     transporter_accessions = np.array(accessions)[transporter_indices]
+    # transporter_encodings = np.array(encodings)
+    # transporter_accessions = np.array(accessions)
 
     df_family_predictions = predict_family(transporter_encodings, transporter_accessions)
     #df_subfamily_predictions = predict_subfamily(transporter_encodings, transporter_accessions)
@@ -103,16 +106,22 @@ def main(input_file: str=None, output_dir: str = "results", preprocess: bool = T
     df_final.to_csv(output_file, index=False)
     logging.info(f"All predictions saved to {output_file}")
 
-    return df_final
+
+    # SPOT prediction
+    spot_predictions = predict_SPOT(transporter_encodings, transporter_accessions, organism_id, substrates_inchis)
+
+    return df_final, spot_predictions
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the prediction pipeline")
+    parser.add_argument('--organism_id', type=list, help='Keggs organism id')
     parser.add_argument('--input_dir', type=str, required=True, help='Path to fasta containing sequences (genome)')
     parser.add_argument('--output_dir', type=str, required=True, help='Output directory path')
     parser.add_argument('--gpu', type=int, default=2, help='GPU index to use')
     parser.add_argument('--nopreprocess', action='store_false', dest='preprocess', help='Disable preprocessing of sequences')
     parser.add_argument('--embeddings_file', type=str, help='Path to existing embeddings file (optional)')
     parser.add_argument('--labels_file', type=str, help='Path to existing labels file (optional)')
+    parser.add_argument('--substrates_inchis', type=list, help='List with susbtrates inchis (optional)')
     args = parser.parse_args()
 
-    main(args.input_dir, args.output_dir, args.preprocess, args.gpu, args.embeddings_file, args.labels_file)
+    main(args.organism_id, args.substrates_inchis, args.input_dir, args.output_dir, args.preprocess, args.gpu, args.embeddings_file, args.labels_file)

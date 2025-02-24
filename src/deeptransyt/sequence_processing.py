@@ -48,22 +48,21 @@ def preprocess_sequences(df: pd.DataFrame,  max_length: int = 600) -> pd.DataFra
 
     for _, row in df.iterrows():
         id, seq = row['ID'], row['Sequence']
-        if len(seq) < 50:
-            continue  # remove fragments
-        if len(seq) < max_length:
-            seq = seq.ljust(max_length, '-')  # Pad sequences shorter than max_length with '-'
-        elif len(seq) > max_length:
-            seq = seq[:max_length]  # Truncate sequences longer than max_length
+        if len(seq) < 50: 
+            continue # remove fragments
+        #     seq = seq.ljust(max_length, '-')  # Pad sequences shorter than max_length with '-'
+        # elif len(seq) > max_length:
+        #     seq = seq[:max_length]  # Truncate sequences longer than max_length
         processed_sequences.append((id, seq))
 
     df = pd.DataFrame(processed_sequences, columns=['ID', 'Sequence'])
-    df = remove_ambiguous_aa(df)            # removing ambiguous amino acids
+    df = remove_ambiguous_aa(df)            # processing ambiguous amino acids
 
     return df
 
 
-def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'esm2_t33_650M_UR50D', batch_size: int = 8, output_dir: str = 'data', gpu: int=2, preprocess: bool = True) -> tuple:
-
+def create_embeddings(df: pd.DataFrame, input_filename: str, model_name: str = 'esm1b_t33_650M_UR50S', batch_size: int = 8, output_dir: str = 'data', gpu: int=2, preprocess: bool = True) -> tuple:
+    """Create sequence embeddings using the specified model and save them to a file."""
     if preprocess:
         df = preprocess_sequences(df)
 
@@ -73,7 +72,8 @@ def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'e
         "esm2_t12": 12,
         "esm2_t30": 30,
         "esm2_t48": 48,
-        "esm2_t36": 36
+        "esm2_t36": 36,
+        "esm1b_t33": 33
     }
 
     repr_layer = next((layer for name, layer in repr_layer_map.items() if name in model_name), None)
@@ -85,6 +85,7 @@ def create_encodings(df: pd.DataFrame, input_filename: str, model_name: str = 'e
 
     device = torch.device(f'cuda:{gpu}' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
+    #model = model.half()
 
     labels = df["ID"].tolist()
     sequences = df["Sequence"].tolist()

@@ -5,6 +5,13 @@ from .DNN import DNN, DNN_binary, DNN_weight, HierarchicalDNN
 import json
 import os
 import torch.nn.functional as F
+from .auxiliary_functions import getMeanRepr, prepare_prediction_data
+from .fetch_metabolites import get_genome_metabolites_as_smiles
+import pickle
+from os.path import join
+from transformers import AutoTokenizer, AutoModelForMaskedLM
+import xgboost as xgb
+from rdkit import Chem
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, 'models_mappings')
@@ -24,6 +31,7 @@ def predict_binary(encodings: np.ndarray, accession: list) -> pd.DataFrame:
     df_binary_predictions = pd.DataFrame({'Accession': accession, "Binary_Predictions": predictions})
 
     binary_labels = (predictions > 0.5).astype(int)
+    #binary_labels = predictions 
     #num_transporters = np.sum(binary_labels)
 
     return df_binary_predictions, binary_labels
@@ -220,3 +228,45 @@ def predict_substrate_classes(transporter_encodings: np.ndarray, transporter_acc
     df_substrate_classes = pd.DataFrame({'Accession': transporter_accessions, 'Class_substrate': predicted_labels_names})
 
     return df_substrate_classes
+
+
+def predict_SPOT(transporter_encodings, transporter_accessions, organism_id: str = None, substrates_inchis: list = None):
+    if substrates_inchis:
+        substrates_df = pd.DataFrame({"InChI": substrates_inchis})
+        substrates_df["SMILES"] = substrates_df["InChI"].apply(
+            lambda x: Chem.MolToSmiles(Chem.inchi.MolFromInchi(x))[:510]
+        )
+        substrates_df["Original_ID"] = substrates_df["InChI"]
+    else:
+        smiles_dict = get_genome_metabolites_as_smiles(organism_id)
+        substrates_df = pd.DataFrame(list(smiles_dict.items()), columns=["Original_ID", "SMILES"])
+        
+    all_smiles = np.array(list(substrates_df["SMILES"]))
+
+    tokenizer = AutoTokenizer.from_pretrained("seyonec/ChemBERTa-zinc-base-v1")
+    model = AutoModelForMaskedLM.from_pretrained("seyonec/ChemBERTa-zinc-base-v1")
+
+    mean_repr = getMeanRepr(all_smiles, tokenizer, model)
+    substrates_df["ChemBERTa"] = list(mean_repr)
+
+    bst = pickle.load(open(os.path.join(MODEL_DIR, "xgboost_model_production_mode_esm2.dat"), "rb"))
+    feature_names = bst.feature_names
+
+    all_results = []
+    for i, encoding in enumerate(transporter_encodings):
+        data = prepare_prediction_data(encoding, substrates_df["ChemBERTa"])
+
+        dnew = xgb.DMatrix(data, feature_names=feature_names)
+        y_pred_new = bst.predict(dnew)
+
+        for j, prediction in enumerate(y_pred_new):
+            substrate_id = substrates_df["Original_ID"].iloc[j]
+            all_results.append({
+                "Accession": transporter_accessions[i],
+                "Substrate": substrate_id,
+                "Prediction Value": prediction
+            })
+
+    result_df = pd.DataFrame(all_results, columns=["Accession", "Substrate", "Prediction Value"])
+    
+    return result_df
