@@ -1,18 +1,16 @@
 import os
 import argparse
 import json
-import logging
+import logging 
 import numpy as np
 import requests
+from .auxiliary_functions import get_chebi_id
 from .sequence_processing import load_sequences, preprocess_sequences, create_embeddings
 from .make_predictions import (
     predict_binary,
     predict_family,
-   # predict_subfamily,
-   # predict_metabolic_important, 
-    predict_family_subfamily,
-    predict_substrate_classes,
-    predict_SPOT
+    predict_subfamily,
+    predict_substrate_classes
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -29,6 +27,7 @@ FILE_URLS = {
     'family_subfamily_10.ckpt': BASE_URL + 'family_subfamily_10.ckpt',
     'family_subfamily_mappings.json': BASE_URL + 'family_subfamily_mappings.json'
 }
+
 
 def download_file(file_name, url):
     file_path = os.path.join(MODEL_DIR, file_name)
@@ -51,66 +50,81 @@ def download_all_files():
     
     for file_name, url in FILE_URLS.items():
         download_file(file_name, url)
-
+ 
 download_all_files()
-
+ 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def main(input_file: str=None, output_dir: str = "results", preprocess: bool = True, gpu: int = 2, 
-         embeddings_file: str = None, labels_file: str = None, organism_id: str = None, substrates_inchis: list = None):
+def main(input_file: str=None, output_dir: str = "results", gpu: int = 2, embeddings_file: str = None, labels_file: str = None, organism_id: str = None, substrates_inchis: list = None, binary_threshold=0.5, annotation_threshold=0.5):
     
     if embeddings_file and labels_file:
         logging.info("Loading existing encodings and labels")
-        encodings = np.load(embeddings_file)
+        embeddings = np.load(embeddings_file)
         accessions = np.load(labels_file)
     else:
         df_sequences = load_sequences(input_file)
+        df_sequences = preprocess_sequences(df_sequences)
 
-        if preprocess:
-            logging.info("Preprocessing sequences and creating embeddings")
-            df_sequences = preprocess_sequences(df_sequences)
-
-        encodings, accessions = create_embeddings(df_sequences, input_file, gpu=gpu)
-
-    df_binary_predictions, binary_labels = predict_binary(encodings, accessions)
+        embeddings, accessions = create_embeddings(df_sequences, input_file, gpu=gpu)
+    
+    df_binary_predictions, binary_labels = predict_binary(embeddings, accessions, threshold=binary_threshold)
 
     transporter_indices = np.where(binary_labels == 1)[0]
-    transporter_encodings = np.array(encodings)[transporter_indices]
+    transporter_embeddings = np.array(embeddings)[transporter_indices]
     transporter_accessions = np.array(accessions)[transporter_indices]
-    # transporter_encodings = np.array(encodings)
-    # transporter_accessions = np.array(accessions)
 
-    df_family_predictions = predict_family(transporter_encodings, transporter_accessions)
-    #df_subfamily_predictions = predict_subfamily(transporter_encodings, transporter_accessions)
-    #df_metabolic_predictions = predict_metabolic_important(transporter_encodings, transporter_accessions)
-    df_family_subfamily_predictions = predict_family_subfamily(transporter_encodings, transporter_accessions)
-    df_susbtrate_classes_predictions = predict_substrate_classes(transporter_encodings, transporter_accessions)
+    df_family_predictions = predict_family(transporter_embeddings, transporter_accessions, threshold=annotation_threshold)
+    df_subfamily_predictions = predict_subfamily(transporter_embeddings, transporter_accessions, threshold=annotation_threshold)
+    df_susbtrate_classes_predictions = predict_substrate_classes(transporter_embeddings, transporter_accessions)
 
     df_merged = df_binary_predictions.merge(df_family_predictions, on='Accession', how='left')
-    #df_merged = df_merged.merge(df_subfamily_predictions, on='Accession', how='left')
-    #df_merged = df_merged.merge(df_metabolic_predictions, on='Accession', how='left')
-    df_merged = df_merged.merge(df_family_subfamily_predictions, on='Accession', how='left')
+    df_merged = df_merged.merge(df_subfamily_predictions, on='Accession', how='left')
     df_merged = df_merged.merge(df_susbtrate_classes_predictions, on='Accession', how='left')
 
-    #adding family descriptions correspoding to collumn family>12
     with open(os.path.join(MODEL_DIR, 'family_descriptions.json'), 'r') as f:
         family_descriptions = json.load(f)
 
-    df_merged['Family_Description'] = df_merged['PredictedFamily_>12'].map(family_descriptions)
-    
-    #saving only positives rows in the df
+    df_merged['Family_Description'] = df_merged['Predicted_Family'].map(family_descriptions)
+
+    #getting the substrates associated either with family or subfamily (if they match the family)
+    with open(os.path.join(MODEL_DIR, 'tcdb_susbtrate_mappings.json'), 'r') as file:
+        data = json.load(file)
+
+    family_to_chebi = data["family"]
+    subfamily_to_chebi = data["subfamily"]
+
+    df_merged["Associated ChEBIs"] = df_merged.apply(
+    lambda row: get_chebi_id(row["Predicted_Family"], row["Predicted_SubFamily"], family_to_chebi, subfamily_to_chebi),
+    axis=1
+)
+
+    # df_merged["Corrected_SubFamily"] = df_merged.apply(
+    #     lambda row: row["Predicted_SubFamily"]
+    #     if isinstance(row["Predicted_SubFamily"], str)
+    #     and row["Predicted_SubFamily"].startswith(row["Predicted_Family"])
+    #     else "-",
+    #     axis=1
+    # )
+
+    # # 2) Define Associated ChEBIs de forma simples
+    # df_merged["Associated ChEBIs"] = df_merged.apply(
+    #     lambda row: get_subfamily_and_chebi(
+    #         row["Predicted_Family"],
+    #         row["Corrected_SubFamily"],   
+    #         family_to_chebi,
+    #         subfamily_to_chebi
+    #     ),
+    #     axis=1
+    # )
+
     df_final = df_merged[df_merged['Accession'].isin(transporter_accessions)]
 
     os.makedirs(output_dir, exist_ok=True)
     output_file = os.path.join(output_dir, "final_predictions.csv")
     df_final.to_csv(output_file, index=False)
     logging.info(f"All predictions saved to {output_file}")
-
-
-    # SPOT prediction
-    spot_predictions = predict_SPOT(transporter_encodings, transporter_accessions, organism_id, substrates_inchis)
-
-    return df_final, spot_predictions
+    
+    return df_final
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the prediction pipeline")
@@ -118,10 +132,11 @@ if __name__ == "__main__":
     parser.add_argument('--input_dir', type=str, required=True, help='Path to fasta containing sequences (genome)')
     parser.add_argument('--output_dir', type=str, required=True, help='Output directory path')
     parser.add_argument('--gpu', type=int, default=2, help='GPU index to use')
-    parser.add_argument('--nopreprocess', action='store_false', dest='preprocess', help='Disable preprocessing of sequences')
     parser.add_argument('--embeddings_file', type=str, help='Path to existing embeddings file (optional)')
     parser.add_argument('--labels_file', type=str, help='Path to existing labels file (optional)')
     parser.add_argument('--substrates_inchis', type=list, help='List with susbtrates inchis (optional)')
+    parser.add_argument('--binary_threshold', type=float, default=0.5, help='Threshold for binary predictions')
+    parser.add_argument('--metabolic_model', help='Metabolic model')
     args = parser.parse_args()
 
-    main(args.organism_id, args.substrates_inchis, args.input_dir, args.output_dir, args.preprocess, args.gpu, args.embeddings_file, args.labels_file)
+    main(args.organism_id, args.substrates_inchis, args.input_dir, args.output_dir, args.gpu, args.embeddings_file, args.labels_file, args.binary_threshold) 

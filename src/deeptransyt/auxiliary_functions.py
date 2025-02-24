@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from transformers import AutoTokenizer, AutoModelForMaskedLM
+#from transformers import AutoTokenizer, AutoModelForMaskedLM
 from tqdm import tqdm
 
 def remove_ambiguous_aa(df: pd.DataFrame) -> pd.DataFrame:

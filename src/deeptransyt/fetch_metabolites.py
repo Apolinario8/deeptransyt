@@ -1,6 +1,6 @@
-import requests
-from rdkit import Chem
-import re
+# import requests
+# from rdkit import Chem
+# import re
 
 def kegg_to_pubchem_id(kegg_id):
     """Fetch PubChem ID from KEGG using the KEGG ID."""

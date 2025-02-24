@@ -1,272 +1,140 @@
 import torch
 import numpy as np
 import pandas as pd
-from .DNN import DNN, DNN_binary, DNN_weight, HierarchicalDNN
+from .DNN import DNN_binary, DNN_substrate, DNN_family, DNN_subfamily
 import json
 import os
 import torch.nn.functional as F
-from .auxiliary_functions import getMeanRepr, prepare_prediction_data
-from .fetch_metabolites import get_genome_metabolites_as_smiles
-import pickle
+#from .auxiliary_functions import getMeanRepr, prepare_prediction_data
+#from .fetch_metabolites import get_genome_metabolites_as_smiles
+#import pickle
 from os.path import join
-from transformers import AutoTokenizer, AutoModelForMaskedLM
-import xgboost as xgb
-from rdkit import Chem
+# from transformers import AutoTokenizer, AutoModelForMaskedLM
+# import xgboost as xgb
+# from rdkit import Chem
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, 'models_mappings')
-        
-def predict_binary(encodings: np.ndarray, accession: list) -> pd.DataFrame:
-    model_path = os.path.join(MODEL_DIR, 'DNN_allclasses.ckpt')
+
+def predict_binary(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
+    model_path = os.path.join(MODEL_DIR, 'binary_esm650M_ratio_1_3.ckpt')
 
     model = DNN_binary.load_from_checkpoint(model_path)
     device = torch.device('cpu')
     model = model.to(device)
     model.eval()
-
-    tensor_encodings = torch.tensor(encodings, dtype=torch.float32)
+    
+    tensor_embeddings = torch.tensor(embeddings, dtype=torch.float32)
     with torch.no_grad():
-        predictions = torch.sigmoid(model(tensor_encodings)).numpy().flatten()
+        predictions = torch.sigmoid(model(tensor_embeddings)).numpy().flatten()
 
     df_binary_predictions = pd.DataFrame({'Accession': accession, "Binary_Predictions": predictions})
 
-    binary_labels = (predictions > 0.5).astype(int)
+    binary_labels = (predictions > threshold).astype(int)
     #binary_labels = predictions 
     #num_transporters = np.sum(binary_labels)
 
     return df_binary_predictions, binary_labels
 
+def predict_family(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
+    model_path = os.path.join(MODEL_DIR, 'family_650M_deploy.ckpt')
 
-def predict_family(transporter_encodings: np.ndarray, transporter_accessions: list) -> pd.DataFrame:
-    family_models = [
-        # {'path': os.path.join(MODEL_DIR, 'family_DNN_no9_10.ckpt'), 'num_classes': 402, 'column_name': 'PredictedFamily_>10', 'label_map': os.path.join(MAPPING_DIR, 'mapping_family10.json')},
-        {'path': os.path.join(MODEL_DIR, 'family_DNN_no9_12.ckpt'), 'num_classes': 328, 'column_name': 'PredictedFamily_>12', 'label_map': os.path.join(MODEL_DIR, 'mapping_family12.json')}
-        # {'path': os.path.join(MODEL_DIR, 'family_DNN_no9_15.ckpt'), 'num_classes': 279, 'column_name': 'PredictedFamily_>15', 'label_map': os.path.join(MAPPING_DIR, 'mapping_family15.json')},
-        # {'path': os.path.join(MODEL_DIR, 'family_DNN_no9_20.ckpt'), 'num_classes': 196, 'column_name': 'PredictedFamily_>20', 'label_map': os.path.join(MAPPING_DIR, 'mapping_family20.json')},
-        # {'path': os.path.join(MODEL_DIR, 'family_DNN_no9_30.ckpt'), 'num_classes': 109, 'column_name': 'PredictedFamily_>30', 'label_map': os.path.join(MAPPING_DIR, 'mapping_family30.json')},
-        # {'path': os.path.join(MODEL_DIR, 'family_DNN_no9_40.ckpt'), 'num_classes': 75, 'column_name': 'PredictedFamily_>40', 'label_map': os.path.join(MAPPING_DIR, 'mapping_family40.json')},
-        # {'path': os.path.join(MODEL_DIR, 'family_DNN_no9_50.ckpt'), 'num_classes': 51, 'column_name': 'PredictedFamily_>50', 'label_map': os.path.join(MAPPING_DIR, 'mapping_family50.json')},
-    ]
-
-    df_family_predictions = pd.DataFrame({'Accession': transporter_accessions})
-
-    for model_info in family_models:
-        num_classes = model_info['num_classes']
-        
-        family_model = DNN.load_from_checkpoint(checkpoint_path=model_info['path'], num_classes=num_classes)
-        device = torch.device('cpu')
-        family_model = family_model.to(device)
-        family_model.eval()
-
-        transporter_tensor = torch.tensor(transporter_encodings, dtype=torch.float32)
-        with torch.no_grad():
-            transporter_predictions = family_model(transporter_tensor)
-        predicted_families = transporter_predictions.argmax(dim=1).numpy()
-
-        with open(model_info['label_map'], 'r') as f:
-            label_map = json.load(f)
-
-        predicted_family_labels = [label_map[str(label)] for label in predicted_families]
-
-        df_family_predictions[model_info['column_name']] = predicted_family_labels
-
-    return df_family_predictions
-
-
-# def predict_subfamily(transporter_encodings: np.ndarray, transporter_accessions: list) -> pd.DataFrame:
-#     subfamily_models = [
-#         {'path': os.path.join(MODEL_DIR, 'subfamily_DNN_no9_15.ckpt'), 'num_classes': 267, 'column_name': 'PredictedsubFamily_>15', 'label_map': os.path.join(MODEL_DIR, 'mapping_subfamily15.json')}
-#         #{'path': os.path.join(MODEL_DIR, 'subfamily_DNN_no9_20.ckpt'), 'num_classes': 159, 'column_name': 'PredictedsubFamily_>20', 'label_map': os.path.join(MAPPING_DIR, 'mapping_subfamily20.json')},
-#         #{'path': os.path.join(MODEL_DIR, 'subfamily_DNN_no9_30.ckpt'), 'num_classes': 75, 'column_name': 'PredictedsubFamily_>30', 'label_map': os.path.join(MAPPING_DIR, 'mapping_subfamily30.json')},
-#         #{'path': os.path.join(MODEL_DIR, 'subfamily_DNN_no9_50.ckpt'), 'num_classes': 30, 'column_name': 'PredictedSubFamily_>50', 'label_map': os.path.join(MAPPING_DIR, 'mapping_subfamily50.json')}
-#     ]
-
-#     df_subfamily_predictions = pd.DataFrame({'Accession': transporter_accessions})
-
-#     for model_info in subfamily_models:
-#         num_classes = model_info['num_classes']
-        
-#         subfamily_model = DNN.load_from_checkpoint(checkpoint_path=model_info['path'], num_classes=num_classes)
-#         device = torch.device('cpu')
-#         subfamily_model = subfamily_model.to(device)
-#         subfamily_model.eval()
-
-#         transporter_tensor = torch.tensor(transporter_encodings, dtype=torch.float32)
-#         with torch.no_grad():
-#             transporter_predictions = subfamily_model(transporter_tensor)
-#         predicted_subfamilies = transporter_predictions.argmax(dim=1).numpy()
-
-#         with open(model_info['label_map'], 'r') as f:
-#             label_map = json.load(f)
-
-#         predicted_subfamily_labels = [label_map[str(label)] for label in predicted_subfamilies]
-
-#         df_subfamily_predictions[model_info['column_name']] = predicted_subfamily_labels
-
-#     return df_subfamily_predictions
-
-
-# def predict_metabolic_important(transporter_encodings: np.ndarray, transporter_accessions: list) -> pd.DataFrame:    
-#     model_path = os.path.join(MODEL_DIR, 'newdataset_test_no9.ckpt')
-#     label_map_path = os.path.join(MAPPING_DIR, 'mapping_newdataset.json')
-    
-#     new_model = DNN.load_from_checkpoint(checkpoint_path=model_path, num_classes=4)
-#     device = torch.device('cpu')
-#     new_model = new_model.to(device)
-#     new_model.eval()
-
-#     transporter_tensor = torch.tensor(transporter_encodings, dtype=torch.float32)
-#     with torch.no_grad():
-#         transporter_predictions = new_model(transporter_tensor)
-#     predicted_labels = transporter_predictions.argmax(dim=1).numpy()
-
-#     with open(label_map_path, 'r') as f:
-#         label_map = json.load(f)
-
-#     predicted_labels_names = [label_map[str(label)] for label in predicted_labels]
-
-#     df_new_predictions = pd.DataFrame({'Accession': transporter_accessions, 'Predicted_newdataset': predicted_labels_names})
-
-#     return df_new_predictions
-
-
-def predict_family_subfamily(transporter_encodings: np.ndarray, transporter_accessions: list) -> pd.DataFrame:
-
-    label_map_path = os.path.join(MODEL_DIR, 'family_subfamily_mappings.json')
-    label_map_path1 = os.path.join(MODEL_DIR, 'family_to_subfamily_map.json')
-    with open(label_map_path, 'r') as f:
-        mappings = json.load(f)
-        family_mapping = mappings['family_mapping']
-        subfamily_mapping = mappings['subfamily_mapping'] 
-
-    with open(label_map_path1, 'r') as f:
-        family_to_subfamily_map = json.load(f)
-
-    num_family_classes = len(family_mapping)
-    num_subfamily_classes = len(subfamily_mapping)
-
-    model_path = os.path.join(MODEL_DIR, 'family_subfamily_10.ckpt')
-    model = HierarchicalDNN.load_from_checkpoint(checkpoint_path=model_path, 
-                                                 num_families=num_family_classes, 
-                                                 num_subfamilies=num_subfamily_classes)
-    
+    model = DNN_family.load_from_checkpoint(checkpoint_path = model_path, num_classes_level3=330)  
+    #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     device = torch.device('cpu')
     model = model.to(device)
-    model.eval()
+    model.eval() 
 
-    transporter_tensor = torch.tensor(transporter_encodings, dtype=torch.float32)
+    tensor_embeddings = torch.tensor(embeddings, dtype=torch.float32)
 
     with torch.no_grad():
-        fam_pred, sub_pred = model(transporter_tensor)
+        outputs = model(tensor_embeddings)
+        probabilities = F.softmax(outputs, dim=1)  
 
-        fam_prob = F.softmax(fam_pred, dim=1)
-        sub_prob = F.softmax(sub_pred, dim=1)
+        max_confidences, best_indices = probabilities.max(dim=1)  
+        predictions = best_indices.numpy()
 
-        predicted_families = []
-        predicted_subfamilies = []
-        family_confidences = []
-        subfamily_confidences = []
+    with open(os.path.join(MODEL_DIR, 'family_deploy_mappings.json'), 'r') as f:
+        label_map = json.load(f)
 
-        for i in range(len(transporter_accessions)):
-            fam_pred_label = torch.argmax(fam_prob[i]).item()
-            fam_pred_confidence = fam_prob[i][fam_pred_label].item()
-
-            original_family = family_mapping.get(str(fam_pred_label), "Unknown Family")
-            predicted_families.append(original_family)
-            family_confidences.append(fam_pred_confidence)
-
-            valid_subfamilies = family_to_subfamily_map.get(str(fam_pred_label), [])
-
-            if valid_subfamilies:
-                filtered_sub_pred = torch.full_like(sub_pred[i], float('-inf'))
-                filtered_sub_pred[valid_subfamilies] = sub_pred[i][valid_subfamilies]
-
-                filtered_sub_prob = F.softmax(filtered_sub_pred, dim=0)
-
-                sub_pred_label = torch.argmax(filtered_sub_prob).item()
-                sub_pred_confidence = filtered_sub_prob[sub_pred_label].item()
-
-                original_subfamily = subfamily_mapping.get(str(sub_pred_label), "Unknown Subfamily")
-                predicted_subfamilies.append(original_subfamily)
-                subfamily_confidences.append(sub_pred_confidence)
-            else:
-                predicted_subfamilies.append("Unknown Subfamily")
-                subfamily_confidences.append(0.0)
+    predicted_labels_with_threshold = []
+    for idx, conf in zip(predictions, max_confidences):
+        if conf.item() >= threshold:
+            predicted_labels_with_threshold.append(label_map[str(idx)])
+        else:
+            predicted_labels_with_threshold.append("-")
 
     df_predictions = pd.DataFrame({
-        'Accession': transporter_accessions,
-        'PredictedFamily': predicted_families,
-        'FamilyConfidence': family_confidences,
-        'PredictedSubfamily': predicted_subfamilies,
-        'SubfamilyConfidence': subfamily_confidences
+        'Accession': accession,
+        'Family_confidence': max_confidences.numpy(),
+        'Predicted_Family': predicted_labels_with_threshold
     })
 
     return df_predictions
 
-def predict_substrate_classes(transporter_encodings: np.ndarray, transporter_accessions: list) -> pd.DataFrame:     
-    
-    model_path = os.path.join(MODEL_DIR, 'substrate_classes.ckpt')
-    label_map_path = os.path.join(MODEL_DIR, 'mapping_susbtrate_classes.json')
 
-    pos_weight = torch.tensor([0.2224, 0.0389, 0.0757, 0.3443, 0.0426, 0.0761, 0.2000], dtype=torch.float32)
-    
-    substrate_classes_model = DNN_weight.load_from_checkpoint(checkpoint_path=model_path, num_classes=7, weight=pos_weight)
+def predict_subfamily(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
+    model_path = os.path.join(MODEL_DIR, 'subfamily_650M.ckpt')
+
+    model = DNN_subfamily.load_from_checkpoint(checkpoint_path = model_path, num_classes_level4=420)  
+    #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     device = torch.device('cpu')
-    substrate_classes_model = substrate_classes_model.to(device)
-    substrate_classes_model.eval()
+    model = model.to(device)
+    model.eval() 
 
-    transporter_tensor = torch.tensor(transporter_encodings, dtype=torch.float32)
+    tensor_embeddings = torch.tensor(embeddings, dtype=torch.float32)
+
     with torch.no_grad():
-        transporter_predictions = substrate_classes_model(transporter_tensor)
-    predicted_labels = transporter_predictions.argmax(dim=1).numpy()
+        outputs = model(tensor_embeddings)
+        probabilities = F.softmax(outputs, dim=1)  
 
-    with open(label_map_path, 'r') as f:
-        label_map = json.load(f)
+        max_confidences, best_indices = probabilities.max(dim=1)  
+        predictions = best_indices.numpy()
 
-    predicted_labels_names = [label_map[str(label)] for label in predicted_labels]
+    with open(os.path.join(MODEL_DIR, 'subfamily_mappings.json'), 'r') as f:
+            label_map = json.load(f)
 
-    df_substrate_classes = pd.DataFrame({'Accession': transporter_accessions, 'Class_substrate': predicted_labels_names})
+    predicted_labels_with_threshold = []
+    for idx, conf in zip(predictions, max_confidences):
+        if conf.item() >= threshold:
+            predicted_labels_with_threshold.append(label_map[str(idx)])
+        else:
+            predicted_labels_with_threshold.append("-")
 
-    return df_substrate_classes
+    df_predictions = pd.DataFrame({
+        'Accession': accession,
+        'SubFamily_confidence': max_confidences.numpy(),
+        'Predicted_SubFamily': predicted_labels_with_threshold
+    })
+
+    return df_predictions
 
 
-def predict_SPOT(transporter_encodings, transporter_accessions, organism_id: str = None, substrates_inchis: list = None):
-    if substrates_inchis:
-        substrates_df = pd.DataFrame({"InChI": substrates_inchis})
-        substrates_df["SMILES"] = substrates_df["InChI"].apply(
-            lambda x: Chem.MolToSmiles(Chem.inchi.MolFromInchi(x))[:510]
-        )
-        substrates_df["Original_ID"] = substrates_df["InChI"]
-    else:
-        smiles_dict = get_genome_metabolites_as_smiles(organism_id)
-        substrates_df = pd.DataFrame(list(smiles_dict.items()), columns=["Original_ID", "SMILES"])
-        
-    all_smiles = np.array(list(substrates_df["SMILES"]))
-
-    tokenizer = AutoTokenizer.from_pretrained("seyonec/ChemBERTa-zinc-base-v1")
-    model = AutoModelForMaskedLM.from_pretrained("seyonec/ChemBERTa-zinc-base-v1")
-
-    mean_repr = getMeanRepr(all_smiles, tokenizer, model)
-    substrates_df["ChemBERTa"] = list(mean_repr)
-
-    bst = pickle.load(open(os.path.join(MODEL_DIR, "xgboost_model_production_mode_esm2.dat"), "rb"))
-    feature_names = bst.feature_names
-
-    all_results = []
-    for i, encoding in enumerate(transporter_encodings):
-        data = prepare_prediction_data(encoding, substrates_df["ChemBERTa"])
-
-        dnew = xgb.DMatrix(data, feature_names=feature_names)
-        y_pred_new = bst.predict(dnew)
-
-        for j, prediction in enumerate(y_pred_new):
-            substrate_id = substrates_df["Original_ID"].iloc[j]
-            all_results.append({
-                "Accession": transporter_accessions[i],
-                "Substrate": substrate_id,
-                "Prediction Value": prediction
-            })
-
-    result_df = pd.DataFrame(all_results, columns=["Accession", "Substrate", "Prediction Value"])
+def predict_substrate_classes(embeddings: np.ndarray, accession: list) -> pd.DataFrame:     
     
-    return result_df
+    model_path = os.path.join(MODEL_DIR, 'substrate_multiclass.ckpt')
+
+    model = DNN_substrate.load_from_checkpoint(checkpoint_path = model_path, num_classes_level1=7)  
+    #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    device = torch.device('cpu')
+    model = model.to(device)
+    model.eval() 
+
+    tensor_embeddings = torch.tensor(embeddings, dtype=torch.float32)
+
+    with torch.no_grad():
+        outputs = model(tensor_embeddings) 
+        predictions = torch.argmax(outputs, dim=1).numpy()
+
+    with open(os.path.join(MODEL_DIR, 'mapping_susbtrate_classes.json'), 'r') as f:
+            label_map = json.load(f)
+
+    predicted_subs_labels = [label_map[str(label)] for label in predictions]
+
+    df_predictions = pd.DataFrame({
+        'Accession': accession,
+        'Subs_confidence': F.softmax(outputs, dim=1).numpy().max(axis=1),
+        'Predicted_substrate': predicted_subs_labels
+    })
+
+    return df_predictions

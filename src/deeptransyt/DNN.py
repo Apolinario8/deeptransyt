@@ -1,250 +1,59 @@
 import torch
 import torch.nn as nn
 import pytorch_lightning as pl
-import torchmetrics
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torchmetrics.classification import BinaryAccuracy
-
-
-class DNN(pl.LightningModule):
-    def __init__(self, num_classes):
-        super(DNN, self).__init__()
-
-        self.fc1 = nn.Linear(1280, 946)
-        self.bn1 = nn.BatchNorm1d(946)
-        self.dropout1 = nn.Dropout(0.233)
-        
-        self.fc2 = nn.Linear(946, 592)
-        self.bn2 = nn.BatchNorm1d(592)
-        self.dropout2 = nn.Dropout(0.233)
-        
-        self.fc3 = nn.Linear(592, 341)
-        self.bn3 = nn.BatchNorm1d(341)
-        self.dropout3 = nn.Dropout(0.233)
-        
-        self.fc4 = nn.Linear(341, num_classes)
-        
-        self.criterion = nn.CrossEntropyLoss()
-        self.accuracy = torchmetrics.Accuracy("multiclass", num_classes=num_classes) 
-    
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = self.bn1(x)
-        x = self.dropout1(x)
-
-        x = torch.relu(self.fc2(x))
-        x = self.bn2(x)
-        x = self.dropout2(x)
-
-        x = torch.relu(self.fc3(x))
-        x = self.bn3(x)
-        x = self.dropout3(x)
-
-        x = self.fc4(x)  
-        return x
-
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x)
-        loss = self.criterion(y_hat, y)
-        acc = self.accuracy(y_hat, y)
-        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train_acc', acc, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x)
-        loss = self.criterion(y_hat, y)
-        acc = self.accuracy(y_hat, y)
-        self.log('val_loss', loss, on_epoch=True, prog_bar=True)
-        self.log('val_acc', acc, on_epoch=True, prog_bar=True)
-        return {'val_loss': loss, 'val_acc': acc}
-
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x)
-        loss = self.criterion(y_hat, y)
-        acc = self.accuracy(y_hat, y)
-        self.log('test_loss', loss)
-        self.log('test_acc', acc)
-        return {'test_loss': loss, 'test_acc': acc}
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-        lr_scheduler = {'scheduler': ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True),
-                        'monitor': 'val_loss',  
-                        'reduce_on_plateau': True}
-        return [optimizer], [lr_scheduler]
-    
-
+#from torch.optim.lr_scheduler import ReduceLROnPlateau
+#from torchmetrics.classification import BinaryAccuracy
+#import torchmetrics
 
 class DNN_binary(pl.LightningModule):
     def __init__(self):
         super(DNN_binary, self).__init__()
-
-        self.fc1 = nn.Linear(1280, 946)
-        self.bn1 = nn.BatchNorm1d(946)
-        self.dropout1 = nn.Dropout(0.233)
+        self.fc1 = nn.Linear(1280, 700)
+        self.bn1 = nn.BatchNorm1d(700)
+        self.dropout1 = nn.Dropout(0.3659)
         
-        self.fc2 = nn.Linear(946, 592)
-        self.bn2 = nn.BatchNorm1d(592)
-        self.dropout2 = nn.Dropout(0.233)
+        self.fc2 = nn.Linear(700, 350)
+        self.bn2 = nn.BatchNorm1d(350)
+        self.dropout2 = nn.Dropout(0.3659)
         
-        self.fc3 = nn.Linear(592, 341)
-        self.bn3 = nn.BatchNorm1d(341)
-        self.dropout3 = nn.Dropout(0.233)
-        
-        self.fc4 = nn.Linear(341, 1)
+        self.fc3 = nn.Linear(350, 1)
         
         self.criterion = nn.BCEWithLogitsLoss()
-        self.accuracy = BinaryAccuracy()
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
-        x = self.bn1(x)
+        # Skip BatchNorm if batch size is 1
+        if x.shape[0] > 1:
+            x = self.bn1(x)
         x = self.dropout1(x)
 
         x = torch.relu(self.fc2(x))
-        x = self.bn2(x)
+        if x.shape[0] > 1:
+            x = self.bn2(x)
         x = self.dropout2(x)
 
-        x = torch.relu(self.fc3(x))
-        x = self.bn3(x)
-        x = self.dropout3(x)
-
-        x = self.fc4(x)  
+        x = self.fc3(x)
         return x
 
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x).squeeze()
-        loss = self.criterion(y_hat, y.float())
-        acc = self.accuracy(torch.sigmoid(y_hat), y)
-        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train_acc', acc, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
+class DNN_multi_output(pl.LightningModule):
+    def __init__(self, num_classes_level1, num_classes_level2, num_classes_level3, num_classes_level4):
+        super(DNN_multi_output, self).__init__()
 
-    def validation_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x).squeeze()
-        loss = self.criterion(y_hat, y.float())
-        acc = self.accuracy(torch.sigmoid(y_hat), y)
-        self.log('val_loss', loss, on_epoch=True, prog_bar=True)
-        self.log('val_acc', acc, on_epoch=True, prog_bar=True)
-        return {'val_loss': loss, 'val_acc': acc}
-
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x).squeeze()
-        loss = self.criterion(y_hat, y.float())
-        acc = self.accuracy(torch.sigmoid(y_hat), y)
-        self.log('test_loss', loss)
-        self.log('test_acc', acc)
-        return {'test_loss': loss, 'test_acc': acc}
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-        lr_scheduler = {'scheduler': ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True),
-                        'monitor': 'val_loss',  
-                        'reduce_on_plateau': True}
-        return [optimizer], [lr_scheduler]
-    
-
-class DNN_weight(pl.LightningModule):
-    def __init__(self, num_classes, weight):
-        super(DNN_weight, self).__init__()
-
-        self.fc1 = nn.Linear(1280, 946)
-        self.bn1 = nn.BatchNorm1d(946)
-        self.dropout1 = nn.Dropout(0.233)
+        self.fc1 = nn.Linear(1280, 750)
+        self.bn1 = nn.BatchNorm1d(750)
+        self.dropout1 = nn.Dropout(0.32)
         
-        self.fc2 = nn.Linear(946, 592)
-        self.bn2 = nn.BatchNorm1d(592)
-        self.dropout2 = nn.Dropout(0.233)
+        self.fc2 = nn.Linear(750, 400)
+        self.bn2 = nn.BatchNorm1d(400)
+        self.dropout2 = nn.Dropout(0.32)
         
-        self.fc3 = nn.Linear(592, 341)
-        self.bn3 = nn.BatchNorm1d(341)
-        self.dropout3 = nn.Dropout(0.233)
-        
-        self.fc4 = nn.Linear(341, num_classes)
-        
-        self.criterion = nn.CrossEntropyLoss(weight=weight)
-        self.accuracy = torchmetrics.Accuracy("multiclass", num_classes=num_classes) 
+        self.fc_level1 = nn.Linear(400, num_classes_level1)
+        self.fc_level2 = nn.Linear(400, num_classes_level2)
+        self.fc_level3 = nn.Linear(400, num_classes_level3)
+        self.fc_level4 = nn.Linear(400, num_classes_level4)
 
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        x = self.bn1(x)
-        x = self.dropout1(x)
-
-        x = torch.relu(self.fc2(x))
-        x = self.bn2(x)
-        x = self.dropout2(x)
-
-        x = torch.relu(self.fc3(x))
-        x = self.bn3(x)
-        x = self.dropout3(x)
-
-        x = self.fc4(x)  
-        return x
-
-    def training_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x)
-        loss = self.criterion(y_hat, y)
-        acc = self.accuracy(y_hat, y)
-        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train_acc', acc, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x)
-        loss = self.criterion(y_hat, y)
-        acc = self.accuracy(y_hat, y)
-        self.log('val_loss', loss, on_epoch=True, prog_bar=True)
-        self.log('val_acc', acc, on_epoch=True, prog_bar=True)
-        return {'val_loss': loss, 'val_acc': acc}
-
-    def test_step(self, batch, batch_idx):
-        x, y = batch
-        y_hat = self(x)
-        loss = self.criterion(y_hat, y)
-        acc = self.accuracy(y_hat, y)
-        self.log('test_loss', loss)
-        self.log('test_acc', acc)
-        return {'test_loss': loss, 'test_acc': acc}
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-        lr_scheduler = {'scheduler': ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True),
-                        'monitor': 'val_loss',  
-                        'reduce_on_plateau': True}
-        return [optimizer], [lr_scheduler]
-    
-class HierarchicalDNN(pl.LightningModule):
-    def __init__(self, num_families, num_subfamilies):
-        super(HierarchicalDNN, self).__init__()
-
-        self.fc1 = nn.Linear(1280, 1024)
-        self.bn1 = nn.BatchNorm1d(1024)
-        self.dropout1 = nn.Dropout(0.3)
-        
-        self.fc2 = nn.Linear(1024, 640)
-        self.bn2 = nn.BatchNorm1d(640)
-        self.dropout2 = nn.Dropout(0.3)
-        
-        self.fc3 = nn.Linear(640, 230)
-        self.bn3 = nn.BatchNorm1d(230)
-        self.dropout3 = nn.Dropout(0.3)
-        
-        self.fc_family = nn.Linear(230, num_families)
-        self.fc_subfamily = nn.Linear(230, num_subfamilies)
-        
         self.criterion = nn.CrossEntropyLoss()
-        self.family_accuracy = torchmetrics.Accuracy("multiclass", num_classes=num_families)
-        self.subfamily_accuracy = torchmetrics.Accuracy("multiclass", num_classes=num_subfamilies)
-    
+
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = self.bn1(x)
@@ -254,49 +63,102 @@ class HierarchicalDNN(pl.LightningModule):
         x = self.bn2(x)
         x = self.dropout2(x)
 
-        x = torch.relu(self.fc3(x))
-        x = self.bn3(x)
-        x = self.dropout3(x)
+        level1_out = self.fc_level1(x)
+        level2_out = self.fc_level2(x)
+        level3_out = self.fc_level3(x)
+        level4_out = self.fc_level4(x)
 
-        family_output = self.fc_family(x)
-        subfamily_output = self.fc_subfamily(x)
-        return family_output, subfamily_output
+        return level1_out, level2_out, level3_out, level4_out
+    
+class DNN_family(pl.LightningModule):
+    def __init__(self, num_classes_level3):
+        super(DNN_family, self).__init__()
+
+        self.fc1 = nn.Linear(1280, 720)
+        self.bn1 = nn.BatchNorm1d(720)
+        self.dropout1 = nn.Dropout(0.23)
+        
+        self.fc2 = nn.Linear(720, 360)
+        self.bn2 = nn.BatchNorm1d(360)
+        self.dropout2 = nn.Dropout(0.23)
+        
+        self.fc_level3 = nn.Linear(360, num_classes_level3)
+
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = self.bn1(x)
+        x = self.dropout1(x)
+
+        x = torch.relu(self.fc2(x))
+        x = self.bn2(x)
+        x = self.dropout2(x)
+
+        level3_out = self.fc_level3(x)
+        return level3_out
+    
+class DNN_subfamily(pl.LightningModule):
+    def __init__(self, num_classes_level4):
+        super(DNN_subfamily, self).__init__()
+
+        self.fc1 = nn.Linear(1280, 800)
+        self.bn1 = nn.BatchNorm1d(800)
+        self.dropout1 = nn.Dropout(0.33)
+        
+        self.fc2 = nn.Linear(800, 400)
+        self.bn2 = nn.BatchNorm1d(400)
+        self.dropout2 = nn.Dropout(0.33)
+        
+        self.fc_level4 = nn.Linear(400, num_classes_level4)
+
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = self.bn1(x)
+        x = self.dropout1(x)
+
+        x = torch.relu(self.fc2(x))
+        x = self.bn2(x)
+        x = self.dropout2(x)
+
+        level4_out = self.fc_level4(x)
+        return level4_out
+    
+class DNN_substrate(pl.LightningModule):
+    def __init__(self, num_classes_level1,):
+        super(DNN_substrate, self).__init__()
+
+        self.fc1 = nn.Linear(1280, 720)
+        self.bn1 = nn.BatchNorm1d(720)
+        self.dropout1 = nn.Dropout(0.2)
+        
+        self.fc2 = nn.Linear(720, 360)
+        self.bn2 = nn.BatchNorm1d(360)
+        self.dropout2 = nn.Dropout(0.15)
+        
+        self.fc_level1 = nn.Linear(360, num_classes_level1)
+
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = self.bn1(x)
+        x = self.dropout1(x)
+
+        x = torch.relu(self.fc2(x))
+        x = self.bn2(x)
+        x = self.dropout2(x)
+
+        level1_out = self.fc_level1(x)
+        return level1_out
 
     def training_step(self, batch, batch_idx):
-        x, y_fam, y_sub = batch
-        fam_output, sub_output = self(x)
-        
-        loss_fam = self.criterion(fam_output, y_fam)
-        loss_sub = self.criterion(sub_output, y_sub)
-        loss = loss_fam + loss_sub
+        x, y1 = batch
+        y_hat1 = self(x)
 
-        fam_acc = self.family_accuracy(fam_output, y_fam)
-        sub_acc = self.subfamily_accuracy(sub_output, y_sub)
-        
-        self.log('train_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train_fam_acc', fam_acc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('train_sub_acc', sub_acc, on_step=False, on_epoch=True, prog_bar=True)
+        loss = self.criterion(y_hat1, y1)
+        self.log('train_loss', loss, on_epoch=True, prog_bar=True)
+
         return loss
-    
-    def test_step(self, batch, batch_idx):
-        x, y_fam, y_sub = batch
-        fam_output, sub_output = self(x)
-
-        loss_fam = self.criterion(fam_output, y_fam)
-        loss_sub = self.criterion(sub_output, y_sub)
-        loss = loss_fam + loss_sub
-
-        fam_acc = self.family_accuracy(fam_output, y_fam)
-        sub_acc = self.subfamily_accuracy(sub_output, y_sub)
-        
-        self.log('test_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test_fam_acc', fam_acc, on_step=False, on_epoch=True, prog_bar=True)
-        self.log('test_sub_acc', sub_acc, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
-        lr_scheduler = {'scheduler': ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True),
-                        'monitor': 'train_loss',  
-                        'reduce_on_plateau': True}
-        return [optimizer], [lr_scheduler]
