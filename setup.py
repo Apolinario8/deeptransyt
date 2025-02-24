@@ -5,7 +5,8 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='deeptransyt',
-    version='0.0.11',
+    version='0.0.11-py38',
+    python_requires='>=3.8',
     description="Transporters annotation using LLM's",
     long_description=long_description,
     long_description_content_type="text/markdown",
