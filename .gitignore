@@ -5,5 +5,5 @@ build/
 .conda/
 ChEBI_complete.sdf
 gff_k12.gff_k12
-iML1515.json
+iML1515.json 
 Substrates.txt
