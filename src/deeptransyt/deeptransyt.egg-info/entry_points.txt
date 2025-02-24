@@ -1,2 +1,0 @@
-[console_scripts]
-run-predictions = deeptransyt.main:main
