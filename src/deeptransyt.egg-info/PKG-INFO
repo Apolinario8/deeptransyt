@@ -1,0 +1,17 @@
+Metadata-Version: 2.1
+Name: deeptransyt
+Version: 0.0.12+py38
+Summary: Transporters annotation using LLM's
+Home-page: https://github.com/Apolinario8/deeptransyt
+Author: Gonçalo Apolinário Cardoso
+Author-email: goncalocardoso2016@gmail.com
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
+# deeptransyt
+
+![alt text](https://github.com/Apolinario8/deeptransyt/blob/main/annotation_tool_workflow.png?raw=true)
+
+
+
+
