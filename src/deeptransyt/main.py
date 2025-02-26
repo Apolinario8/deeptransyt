@@ -18,14 +18,15 @@ MODEL_DIR = os.path.join(BASE_DIR, 'models_mappings')
 BASE_URL = 'https://github.com/Apolinario8/deeptransyt/releases/download/v0.0.1/'
 
 FILE_URLS = {
-    'mapping_family12.json': BASE_URL + 'mapping_family12.json',
-    'DNN_allclasses.ckpt': BASE_URL + 'DNN_allclasses.ckpt',
-    'family_DNN_no9_12.ckpt': BASE_URL + 'family_DNN_no9_12.ckpt',
+    'tcdb_susbtrate_mappings.json': BASE_URL + 'tcdb_susbtrate_mappings.json',
+    'family_deploy_mappings.json': BASE_URL + 'family_deploy_mappings.json',
+    'binary_esm650M_ratio_1_3.ckpt': BASE_URL + 'binary_esm650M_ratio_1_3.ckpt',
+    'family_650M_deploy.ckpt': BASE_URL + 'family_650M_deploy.ckpt',
     'family_descriptions.json': BASE_URL + 'family_descriptions.json',
     'mapping_susbtrate_classes.json': BASE_URL + 'mapping_susbtrate_classes.json',
-    'substrate_classes.ckpt': BASE_URL + 'substrate_classes.ckpt',
-    'family_subfamily_10.ckpt': BASE_URL + 'family_subfamily_10.ckpt',
-    'family_subfamily_mappings.json': BASE_URL + 'family_subfamily_mappings.json'
+    'substrate_multiclass.ckpt': BASE_URL + 'substrate_multiclass.ckpt',
+    'subfamily_650M.ckpt': BASE_URL + 'subfamily_650M.ckpt',
+    'subfamily_mappings.json': BASE_URL + 'subfamily_mappings.json'
 }
 
 
@@ -136,7 +137,7 @@ if __name__ == "__main__":
     parser.add_argument('--labels_file', type=str, help='Path to existing labels file (optional)')
     parser.add_argument('--substrates_inchis', type=list, help='List with susbtrates inchis (optional)')
     parser.add_argument('--binary_threshold', type=float, default=0.5, help='Threshold for binary predictions')
-    parser.add_argument('--metabolic_model', help='Metabolic model')
+    #parser.add_argument('--metabolic_model', help='Metabolic model')
     args = parser.parse_args()
 
     main(args.organism_id, args.substrates_inchis, args.input_dir, args.output_dir, args.gpu, args.embeddings_file, args.labels_file, args.binary_threshold) 
