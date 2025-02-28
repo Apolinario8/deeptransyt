@@ -69,7 +69,7 @@ def main(input_file: str=None, output_dir: str = "results", gpu: int = 2, embedd
         accessions = df_embeddings.iloc[:, -1].tolist()
     else:
         df_sequences = load_sequences(input_file)
-        #df_sequences = preprocess_sequences(df_sequences)
+        df_sequences = preprocess_sequences(df_sequences)
         #embeddings, accessions = create_embeddings(df_sequences, gpu=gpu)
         df_embeddings = create_embeddings(df_sequences, gpu=gpu)
         embeddings = df_embeddings.drop(columns=["Sequence", "ID"]).values  
