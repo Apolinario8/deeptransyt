@@ -17,7 +17,7 @@ pip install deeptransyt
 ### **2. Cloning the repository**
 If you want the latest development version:
 ```bash
-git clone https://github.com/yourusername/deeptransyt.git
+git clone https://github.com/Apolinario8/deeptransyt.git
 cd deeptransyt
 pip install .
 ```
