@@ -7,9 +7,7 @@ ChEBI_complete.sdf
 gff_k12.gff_k12
 iML1515.json 
 Substrates.txt
-.gradio
-docs/
-tests/
+.gradio/
 src/deeptransyt/models_mappings/
 data/kegg_ids.txt
 data/kegg_smiles.txt
