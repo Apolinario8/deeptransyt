@@ -1,2 +1,2 @@
 [console_scripts]
-run-predictions = deeptransyt.main:main
+deeptransyt = deeptransyt.main:cli_main

@@ -8,3 +8,10 @@ gff_k12.gff_k12
 iML1515.json 
 Substrates.txt
 .gradio
+docs/
+tests/
+src/deeptransyt/models_mappings/
+data/kegg_ids.txt
+data/kegg_smiles.txt
+data/k-12.npy
+results/genome_test_embeddings.npy

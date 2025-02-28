@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
-from .DNN import DNN_binary, DNN_substrate, DNN_family, DNN_subfamily
+from .models import MLP_binary, MLP_substrate, MLP_family, MLP_subfamily
 import json
 import os
 import torch.nn.functional as F
@@ -19,7 +19,7 @@ MODEL_DIR = os.path.join(BASE_DIR, 'models_mappings')
 def predict_binary(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
     model_path = os.path.join(MODEL_DIR, 'binary_esm650M_ratio_1_3.ckpt')
 
-    model = DNN_binary.load_from_checkpoint(model_path)
+    model = MLP_binary.load_from_checkpoint(model_path)
     device = torch.device('cpu')
     model = model.to(device)
     model.eval()
@@ -39,7 +39,7 @@ def predict_binary(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd
 def predict_family(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
     model_path = os.path.join(MODEL_DIR, 'family_650M_deploy.ckpt')
 
-    model = DNN_family.load_from_checkpoint(checkpoint_path = model_path, num_classes_level3=330)  
+    model = MLP_family.load_from_checkpoint(checkpoint_path = model_path, num_classes_level3=330)  
     #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     device = torch.device('cpu')
     model = model.to(device)
@@ -76,7 +76,7 @@ def predict_family(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd
 def predict_subfamily(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
     model_path = os.path.join(MODEL_DIR, 'subfamily_650M.ckpt')
 
-    model = DNN_subfamily.load_from_checkpoint(checkpoint_path = model_path, num_classes_level4=420)  
+    model = MLP_subfamily.load_from_checkpoint(checkpoint_path = model_path, num_classes_level4=420)  
     #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     device = torch.device('cpu')
     model = model.to(device)
@@ -114,7 +114,7 @@ def predict_substrate_classes(embeddings: np.ndarray, accession: list) -> pd.Dat
     
     model_path = os.path.join(MODEL_DIR, 'substrate_multiclass.ckpt')
 
-    model = DNN_substrate.load_from_checkpoint(checkpoint_path = model_path, num_classes_level1=7)  
+    model = MLP_substrate.load_from_checkpoint(checkpoint_path = model_path, num_classes_level1=7)  
     #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     device = torch.device('cpu')
     model = model.to(device)

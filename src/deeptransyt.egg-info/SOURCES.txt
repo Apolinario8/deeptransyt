@@ -1,3 +1,4 @@
+LICENSE.txt
 README.md
 setup.py
 src/deeptransyt/DNN.py
@@ -14,3 +15,5 @@ src/deeptransyt.egg-info/dependency_links.txt
 src/deeptransyt.egg-info/entry_points.txt
 src/deeptransyt.egg-info/requires.txt
 src/deeptransyt.egg-info/top_level.txt
+tests/test_main.py
+tests/test_make_predictions.py

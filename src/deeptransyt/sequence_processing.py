@@ -1,12 +1,11 @@
-import os
-import gc
 import time
+from tqdm import tqdm
 import torch
 import numpy as np
 import pandas as pd
 from Bio import SeqIO
 import logging
-import esm
+from transformers import EsmModel, AutoTokenizer
 from .auxiliary_functions import remove_ambiguous_aa
 
 
@@ -61,68 +60,77 @@ def preprocess_sequences(df: pd.DataFrame,  max_length: int = 600) -> pd.DataFra
     return df
 
 
-def create_embeddings(df: pd.DataFrame, input_filename: str, model_name: str = 'esm1b_t33_650M_UR50S', batch_size: int = 8, output_dir: str = 'data', gpu: int=2, preprocess: bool = True) -> tuple:
-    """Create sequence embeddings using the specified model and save them to a file."""
-    if preprocess:
-        df = preprocess_sequences(df)
+def create_embeddings(df: pd.DataFrame, model_name: str = 'facebook/esm2_t33_650M_UR50D', gpu: int=2) -> tuple:
+    
+    df = preprocess_sequences(df)
 
-    repr_layer_map = {
-        "esm2_t33": 33,
-        "esm2_t6": 6,
-        "esm2_t12": 12,
-        "esm2_t30": 30,
-        "esm2_t48": 48,
-        "esm2_t36": 36,
-        "esm1b_t33": 33
-    }
+    ESMs = ["facebook/esm2_t6_8M_UR50D" ,
+         "facebook/esm2_t12_35M_UR50D" ,
+         "facebook/esm2_t30_150M_UR50D" ,
+         "facebook/esm2_t33_650M_UR50D" ,
+         "facebook/esm2_t36_3B_UR50D",
+         "facebook/esm1b_t33_650M_UR50S"]
 
-    repr_layer = next((layer for name, layer in repr_layer_map.items() if name in model_name), None)
-    if repr_layer is None:
-        raise ValueError("Invalid model name provided")
-
-    model, alphabet = esm.pretrained.load_model_and_alphabet(model_name)
-    batch_converter = alphabet.get_batch_converter()
+    if model_name not in ESMs:
+        raise ValueError("Invalid model name provided") 
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    dtype = torch.float32 if model_name == "facebook/esm1b_t33_650M_UR50S" else torch.float16
+    model = EsmModel.from_pretrained(model_name, torch_dtype=dtype)
+    
+#     ds_config = {
+#     "fp16": {
+#         "enabled": True
+#     },
+#     "zero_optimization": {
+#         "stage": 3,
+#         "offload_param": {
+#             "device": "cpu",
+#             "pin_memory": True
+#         }
+#     },
+#     "train_micro_batch_size_per_gpu": 1,
+#     "wall_clock_breakdown": True,
+#     "activation_checkpointing": {
+#         "partition_activations": True,
+#         "contiguous_memory_optimization": True,
+#         "cpu_checkpointing": False,
+#         "synchronize_checkpoint_boundary": False,
+#         "profile": False
+#     }
+# }
+#     model, _, _, _ = deepspeed.initialize(model=model, config=ds_config)
 
     device = torch.device(f'cuda:{gpu}' if torch.cuda.is_available() else 'cpu')
     model = model.to(device)
-    #model = model.half()
+    if "esm2" in model_name:
+        model = model.half()
 
-    labels = df["ID"].tolist()
-    sequences = df["Sequence"].tolist()
+    emb = []
 
-    # Create batches
-    data_batches = [(labels[start:start+batch_size], sequences[start:start+batch_size]) for start in range(0, len(labels), batch_size)]
-
-    sequence_representations = []
     start_time = time.time()
 
-    for batch_labels, batch_sequences in data_batches:
-        batch_data = [(label, sequence) for label, sequence in zip(batch_labels, batch_sequences)]
-        batch_labels, batch_strs, batch_tokens = batch_converter(batch_data)
-        batch_tokens = batch_tokens.to(device)
-        batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
+#Although esm2 has no max_leng we truncate sequences bigger than 1024 (same as in the original esm2 training) because of memort constraints 
+#memory requirements scale quadratically with sequence length
+    for i in tqdm(range(0,len(df))):    #implementar batches
+        inputs = tokenizer(df["Sequence"].loc[i], return_tensors="pt", max_length = 1024, truncation=True, padding=False).to(device)  
 
         with torch.no_grad():
-            results = model(batch_tokens, repr_layers=[repr_layer], return_contacts=True)
+            emb.append( np.array( torch.mean( model(**inputs).last_hidden_state.cpu(), dim = 1)))
 
-        token_representations = results["representations"][repr_layer].cpu()
-
-        for i, tokens_len in enumerate(batch_lens):
-            sequence_representations.append(token_representations[i, 1:tokens_len - 1].mean(0).cpu())     # Generate per-sequence representations
     total_time = round(time.time() - start_time)
     logging.info(f"Time taken for encodings generation: {total_time} seconds")
 
-    os.makedirs(output_dir, exist_ok=True)
-    input_file_base = os.path.splitext(os.path.basename(input_filename))[0]
-    encodings_filename = f"{output_dir}/{input_file_base}_embeddings.npy"
-    labels_filename = f"{output_dir}/{input_file_base}_accessions.npy"
+    #create embedding df
+    df_emb = pd.DataFrame(np.concatenate(emb))
+    df_emb.reset_index( drop = True, inplace = True)
+    df_emb["Sequence"] = df["Sequence"]
+    df_emb["ID"] = df["ID"]  
 
-    np.save(encodings_filename, np.array(sequence_representations)) 
-    np.save(labels_filename, np.array(labels))  
-
-    # Clean up to free memory
-    del model, alphabet, batch_converter, token_representations, results
-    gc.collect()
+    del model
+    del tokenizer
+    del df
+    del inputs
     torch.cuda.empty_cache()
-
-    return np.array(sequence_representations), labels
+     
+    return df_emb
