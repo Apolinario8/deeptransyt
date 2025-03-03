@@ -60,6 +60,28 @@ def download_all_files():
 download_all_files()
  
 def main(input_file: str=None, output_dir: str = "results", gpu: int = 2, embeddings_file: str = None, organism_id: str = None, substrates_inchis: list = None, binary_threshold=0.5, annotation_threshold=0.5):
+    """
+    Main function to perform predictions on a set of protein sequences, including binary classification (transporters vs non-transporters), family prediction, subfamily prediction, and substrate class prediction.
+
+    **Parameters:**
+    - `input_file` (str, optional): Path to the input file containing protein sequences (in FASTA format). If `embeddings_file` is provided, this is not required.
+    - `output_dir` (str, optional): Directory where the results (predictions) will be saved. Defaults to "results".
+    - `gpu` (int, optional): GPU device number to use for embedding creation. Defaults to 2.
+    - `embeddings_file` (str, optional): Path to an existing embeddings file in `.npy` format. If provided, it will be loaded instead of computing new embeddings.
+    - `organism_id` (str, optional): Organism identifier (not used in the current function).
+    - `substrates_inchis` (list, optional): List of substrates' InChI strings (not used in the current function).
+    - `binary_threshold` (float, optional): Threshold for binary classification (transporters vs non-transporters). Defaults to 0.5.
+    - `annotation_threshold` (float, optional): Threshold for family and subfamily annotation confidence. Defaults to 0.5.
+
+    **Returns:**
+    - `pd.DataFrame`: A DataFrame containing the final predictions, including binary predictions, family predictions, subfamily predictions, and their associated confidence scores. The columns are:
+        - `'Accession'`: Sequence accession (ID).
+        - `'Binary_Predictions'`: Binary prediction (1 for transporter, 0 for non-transporter).
+        - `'Predicted_Family'`: Predicted transporter family.
+        - `'Family_confidence'`: Confidence score for the predicted family.
+        - `'Predicted_SubFamily'`: Predicted transporter subfamily.
+        - `'SubFamily_confidence'`: Confidence score for the predicted subfamily.
+    """
     
     if embeddings_file:
         logging.info("Loading existing embeddings...")

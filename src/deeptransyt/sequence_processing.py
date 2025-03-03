@@ -10,8 +10,22 @@ from .auxiliary_functions import remove_ambiguous_aa
 
 
 def load_sequences(file_path: str) -> pd.DataFrame:
-    """ Load sequences from fasta or txt files and return a DataFrame with the ID's and corresponding sequences"""
+    """
+    Load sequences from a file (either FASTA, FAA, or TXT format) and return a DataFrame with the IDs and corresponding sequences.
 
+    **Parameters:**
+    - `file_path` (str): The path to the input file. The file can either be in FASTA, FAA, or TXT format.
+      - FASTA and FAA files must follow the standard format, where each sequence is prefixed by a header line starting with '>' followed by the sequence ID.
+    
+    **Returns:**
+    - `pd.DataFrame`: A DataFrame containing two columns:
+      - `'ID'`: The ID of the sequence. 
+      - `'Sequence'`: The corresponding protein sequence. 
+
+    **Raises:**
+    - `ValueError`: If the input file has an unsupported format (anything other than `.fasta`, `.faa`, or `.txt`).
+
+      """
     sequences = []
     file_extension = file_path.split('.')[-1].lower()
     
@@ -39,30 +53,35 @@ def load_sequences(file_path: str) -> pd.DataFrame:
     df = pd.DataFrame(sequences, columns=['ID', 'Sequence'])
     return df
 
-
-def preprocess_sequences(df: pd.DataFrame,  max_length: int = 600) -> pd.DataFrame:
-    """Preprocess sequences by padding/truncating and removing ambiguous amino acids."""
-
-    processed_sequences = []
-
-    for _, row in df.iterrows():
-        id, seq = row['ID'], row['Sequence']
-        if len(seq) < 50: 
-            continue # remove fragments
-        #     seq = seq.ljust(max_length, '-')  # Pad sequences shorter than max_length with '-'
-        # elif len(seq) > max_length:
-        #     seq = seq[:max_length]  # Truncate sequences longer than max_length
-        processed_sequences.append((id, seq))
-
-    df = pd.DataFrame(processed_sequences, columns=['ID', 'Sequence'])
-    df = remove_ambiguous_aa(df)            # processing ambiguous amino acids
-
-    return df
-
-
 def create_embeddings(df: pd.DataFrame, model_name: str = 'facebook/esm2_t33_650M_UR50D', gpu: int=2) -> tuple:
+    """
+    Generate sequence embeddings using a specified pre-trained ESM model.
+
+    **Parameters:**
+    - `df` (pd.DataFrame): The input DataFrame containing sequences. 
+      The DataFrame must have two columns: `'ID'` for the sequence ID and `'Sequence'` for the protein sequence.
+    - `model_name` (str, optional): The name of the pre-trained ESM model to use for embedding generation. Default is 'facebook/esm2_t33_650M_UR50D'. 
+      Supported models include:
+      - `"facebook/esm2_t6_8M_UR50D"`
+      - `"facebook/esm2_t12_35M_UR50D"`
+      - `"facebook/esm2_t30_150M_UR50D"`
+      - `"facebook/esm2_t33_650M_UR50D"`
+      - `"facebook/esm2_t36_3B_UR50D"`
+      - `"facebook/esm1b_t33_650M_UR50S"`
+    - `gpu` (int, optional): The GPU device index to use for model inference. Default is 2.
+
+    **Returns:**
+    - `tuple`: A DataFrame containing the sequence embeddings and corresponding sequence IDs:
+      - `df_emb` (pd.DataFrame): A DataFrame with the following columns:
+        - `'ID'`: The ID of the sequence.
+        - `'Sequence'`: The original protein sequence.
+        - Embedding columns: The computed embeddings for each sequence.
+
+    **Raises:**
+    - `ValueError`: If an invalid model name is provided.
+    """
     
-    df = preprocess_sequences(df)
+    df = remove_ambiguous_aa(df)
 
     ESMs = ["facebook/esm2_t6_8M_UR50D" ,
          "facebook/esm2_t12_35M_UR50D" ,

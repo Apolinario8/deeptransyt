@@ -17,13 +17,12 @@ Welcome to DeepTransyt's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   installation
    usage
    api
 
 Features
 --------
-DeepTransyt provides a range of features to predict substrates and metabolic pathways.
+DeepTransyt provides a range of features to predict .
 
 Notes
 -----
@@ -54,4 +53,5 @@ To use DeepTransyt, run the following command:
 API
 ---
 For detailed API usage, refer to the API documentation here.
+
 """

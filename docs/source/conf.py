@@ -1,3 +1,7 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../..'))
+
 # -- Extensions --------------------------------------------------------------
 extensions = [
     'sphinx.ext.autodoc',       # Auto-generate API documentation from docstrings
@@ -5,11 +9,6 @@ extensions = [
     'sphinx.ext.viewcode',      # Add links to source code in the documentation
     'sphinx.ext.githubpages'    # Adds .nojekyll file for GitHub Pages compatibility
 ]
-
-# -- Paths setup -------------------------------------------------------------
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../../'))  # Ensure Sphinx can find your package
 
 # -- HTML theme --------------------------------------------------------------
 html_theme = "sphinx_rtd_theme"  # Use Read the Docs theme
