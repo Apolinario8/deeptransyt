@@ -1,17 +1,20 @@
 import os
+import cobra
 import argparse
 import json
 import pandas as pd
 import logging 
 import numpy as np
 import requests
-from .auxiliary_functions import get_chebi_id
-from .sequence_processing import load_sequences, preprocess_sequences, create_embeddings
+from .auxiliary_functions import get_chebi_id, get_final_label, get_substrates, filter_chebi_substrates
+from .sequence_processing import load_sequences, create_embeddings
 from .make_predictions import (
     predict_binary,
     predict_family,
     predict_subfamily,
-    predict_substrate_classes
+    predict_substrate_classes,
+    predict_class, 
+    predict_subclass
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,6 +27,10 @@ FILE_URLS = {
     'tcdb_susbtrate_mappings.json': BASE_URL + 'tcdb_susbtrate_mappings.json',
     'family_deploy_mappings.json': BASE_URL + 'family_deploy_mappings.json',
     'binary_esm650M_ratio_1_3.ckpt': BASE_URL + 'binary_esm650M_ratio_1_3.ckpt',
+    'class_650M.ckpt': BASE_URL + 'class_650M.ckpt',
+    'class_mappings.json': BASE_URL + 'class_mappings.json',
+    'subclass_650M.ckpt': BASE_URL + 'suclass_650M.ckpt',
+    'subclass_mappings.json': BASE_URL + 'subclass_mappings.json',
     'family_650M_deploy.ckpt': BASE_URL + 'family_650M_deploy.ckpt',
     'family_descriptions.json': BASE_URL + 'family_descriptions.json',
     'mapping_susbtrate_classes.json': BASE_URL + 'mapping_susbtrate_classes.json',
@@ -59,7 +66,7 @@ def download_all_files():
  
 download_all_files()
  
-def main(input_file: str=None, output_dir: str = "results", gpu: int = 2, embeddings_file: str = None, organism_id: str = None, substrates_inchis: list = None, binary_threshold=0.5, annotation_threshold=0.5):
+def main(input_file: str=None, output_dir: str = "results", gpu: int = 2, embeddings_file: str = None, organism_id: str = None, model_path: str = None , binary_threshold=0.5, annotation_threshold=0.5):
     """
     Main function to perform predictions on a set of protein sequences, including binary classification (transporters vs non-transporters), family prediction, subfamily prediction, and substrate class prediction.
 
@@ -91,7 +98,7 @@ def main(input_file: str=None, output_dir: str = "results", gpu: int = 2, embedd
         accessions = df_embeddings.iloc[:, -1].tolist()
     else:
         df_sequences = load_sequences(input_file)
-        df_sequences = preprocess_sequences(df_sequences)
+        #df_sequences = preprocess_sequences(df_sequences)
         #embeddings, accessions = create_embeddings(df_sequences, gpu=gpu)
         df_embeddings = create_embeddings(df_sequences, gpu=gpu)
         embeddings = df_embeddings.drop(columns=["Sequence", "ID"]).values  
@@ -107,30 +114,37 @@ def main(input_file: str=None, output_dir: str = "results", gpu: int = 2, embedd
     transporter_embeddings = np.array(embeddings)[transporter_indices]
     transporter_accessions = np.array(accessions)[transporter_indices]
 
+    df_class_predictions = predict_class(transporter_embeddings, transporter_accessions, threshold=annotation_threshold)
+    df_subclass_predictions = predict_subclass(transporter_embeddings, transporter_accessions, threshold=annotation_threshold)
     df_family_predictions = predict_family(transporter_embeddings, transporter_accessions, threshold=annotation_threshold)
     df_subfamily_predictions = predict_subfamily(transporter_embeddings, transporter_accessions, threshold=annotation_threshold)
     #df_susbtrate_classes_predictions = predict_substrate_classes(transporter_embeddings, transporter_accessions)
-
-    df_merged = df_binary_predictions.merge(df_family_predictions, on='Accession', how='left')
+    
+    df_merged = df_binary_predictions.merge(df_class_predictions, on='Accession', how='left')
+    df_merged = df_merged.merge(df_subclass_predictions, on='Accession', how='left')
+    df_merged = df_merged.merge(df_family_predictions, on='Accession', how='left')
     df_merged = df_merged.merge(df_subfamily_predictions, on='Accession', how='left')
     #df_merged = df_merged.merge(df_susbtrate_classes_predictions, on='Accession', how='left')
 
-    #with open(os.path.join(MODEL_DIR, 'family_descriptions.json'), 'r') as f:
-        #family_descriptions = json.load(f)
+    df_merged["Annotation"] = df_merged.apply(lambda row: get_final_label(row, annotation_threshold), axis=1)
 
-    #df_merged['Family_Description'] = df_merged['Predicted_Family'].map(family_descriptions)
+    #getting the substrates associated either with family or subfamily 
+    with open(os.path.join(MODEL_DIR, 'tcdb_susbtrate_mappings.json')) as file:
+        substrate_mappings = json.load(file)
+        family_to_chebi = substrate_mappings["family"]
+        subfamily_to_chebi = substrate_mappings["subfamily"]
 
-    #getting the substrates associated either with family or subfamily (if they match the family)
-    #with open(os.path.join(MODEL_DIR, 'tcdb_susbtrate_mappings.json'), 'r') as file:
-    #    data = json.load(file)
+    df_merged["Substrates"] = df_merged["Annotation"].apply(lambda x: get_substrates(x, family_to_chebi, subfamily_to_chebi))
+    df_merged["Substrates"] = df_merged["Substrates"].apply(lambda x: ", ".join(x) if x else "None")
+    
+    # Load the metabolic model and filter metabolites
+    model = None
+    if model_path:
+        model = cobra.io.read_sbml_model(model_path)
+    if model:
+        df_merged = filter_chebi_substrates(df_merged, model)
 
-    #family_to_chebi = data["family"]
-    #subfamily_to_chebi = data["subfamily"]
-
-    #df_merged["Associated ChEBIs"] = df_merged.apply(
-    #lambda row: get_chebi_id(row["Predicted_Family"], row["Predicted_SubFamily"], family_to_chebi, subfamily_to_chebi),
-    #axis=1
-#)
+    df_merged["Valid_Substrates"] = df_merged["Valid_Substrates"].apply(lambda x: ", ".join(x) if x else "None")
 
     # df_merged["Corrected_SubFamily"] = df_merged.apply(
     #     lambda row: row["Predicted_SubFamily"]
@@ -167,13 +181,15 @@ def cli_main():
     parser.add_argument('--gpu', type=int, default=2, help='GPU index to use')
     parser.add_argument('--embeddings_file', type=str, help='Path to existing embeddings file (optional)')
     parser.add_argument('--binary_threshold', type=float, default=0.5, help='Threshold for binary predictions')
+    parser.add_argument('--modelpath', type=str, help='Path to the metabolic model (SBML format)')
 
     args = parser.parse_args()
     main(args.input_file, 
          args.output_dir, 
          args.gpu, 
          args.embeddings_file, 
-         args.binary_threshold) 
+         args.binary_threshold, 
+         args.modelpath) 
 
 if __name__ == "__main__":
     cli_main()

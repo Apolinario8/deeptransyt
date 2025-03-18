@@ -7,9 +7,9 @@
 
 ## 🚀 Installation  
 
-### **0. Create conda environment **
+### **0. Create conda environment**
 ```bash
-conda create -n deeptransyt python=3.x # or python=3.9, python=3.10, python=3.11
+conda create -n deeptransyt python=3.8 # or python=3.9, python=3.10, python=3.11
 conda activate deeptransyt
 ```
 
@@ -46,7 +46,7 @@ DeepTransyt is a command-line tool designed for predicting transporter proteins 
 To run DeepTransyt, execute the following command:  
 
 ```bash
-python deeptransyt.py --input_file <your_genome.faa> --output_dir <output_directory> 
+deeptransyt.py --input_file <your_genome.faa> --output_dir <output_directory> 
 ```
 This will run the pipeline and save the results in the specified output directory.
 
@@ -58,25 +58,25 @@ Optional Arguments
 --embeddings_file <path>: Path to an existing embeddings file to skip feature extraction.
 --binary_threshold <value>: Sets the threshold for binary classification (default: 0.5).
 
-Example Commands
+### **Example Commands**
 Running with a genome FASTA file
 ```bash
-python deeptransyt.py --input_file <genome.faa> --output_dir <results/> 
+deeptransyt.py --input_file <genome.faa> --output_dir <results/> 
 ```
 
 Using precomputed embeddings
 ```bash
-python deeptransyt.py --embeddings_file embeddings.npy --output_dir results/
+deeptransyt.py --embeddings_file embeddings.npy --output_dir results/
 ```
 
 It's also possible to run in a jupyter notebook. An example is provided in [notebook.ipynb](https://github.com/Apolinario8/deeptransyt/blob/main/notebook.ipynb)
 
-## 📜 License
-This project is licensed under the MIT License. See the `LICENSE` file for details.
-
 
 ## DeepTransyt's Workflow
 ![alt text](https://github.com/Apolinario8/deeptransyt/blob/main/annotation_tool_workflow.png?raw=true)
+
+## 📜 License
+This project is licensed under the MIT License. See the `LICENSE` file for details.
 
 
 

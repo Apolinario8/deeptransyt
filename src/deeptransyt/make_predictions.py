@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import pandas as pd
-from .models import MLP_binary, MLP_substrate, MLP_family, MLP_subfamily
+from .models import MLP_binary, MLP_substrate, MLP_family, MLP_subfamily, MLP_class, MLP_subclass
 import json
 import os
 import torch.nn.functional as F
@@ -56,6 +56,125 @@ def predict_binary(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd
     #num_transporters = np.sum(binary_labels)
 
     return df_binary_predictions, binary_labels
+
+def predict_class(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
+    """
+    Predict the TCDB family (e.g., transporter family) for a set of protein sequences 
+    based on pre-trained embeddings using a multi-class classification model.
+
+    **Parameters:**
+    - `embeddings` (np.ndarray): A numpy array containing the sequence embeddings to be predicted. 
+      Each row corresponds to the embedding of a single protein sequence.
+    - `accession` (list): A list of accession IDs corresponding to the sequences in the embeddings. 
+      Each entry should match the order of the embeddings.
+    - `threshold` (float, optional): The threshold for classifying the predictions. If the predicted confidence is greater than this threshold, 
+      the sequence is assigned a predicted family label, otherwise it is assigned a placeholder ("-"). Default is 0.5.
+
+    **Returns:**
+    - `pd.DataFrame`: A DataFrame with three columns:
+      - `'Accession'`: The accession IDs corresponding to the sequences.
+      - `'Family_confidence'`: The confidence score of the predicted family label.
+      - `'Predicted_Family'`: The predicted TCDB family label for each sequence, or `'-'` if the confidence is below the threshold.
+
+    **Raises:**
+    - `FileNotFoundError`: If the model checkpoint file (`family_650M_deploy.ckpt`) or the mapping file (`family_deploy_mappings.json`) cannot be found.
+    - `ValueError`: If the input `embeddings` array and `accession` list have mismatched lengths.
+
+"""
+    model_path = os.path.join(MODEL_DIR, 'class_650M.ckpt')
+
+    model = MLP_class.load_from_checkpoint(checkpoint_path = model_path, num_classes_level1=5)  
+    #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    device = torch.device('cpu')
+    model = model.to(device)
+    model.eval() 
+
+    tensor_embeddings = torch.tensor(embeddings, dtype=torch.float32)
+
+    with torch.no_grad():
+        outputs = model(tensor_embeddings)
+        probabilities = F.softmax(outputs, dim=1)  
+
+        max_confidences, best_indices = probabilities.max(dim=1)  
+        predictions = best_indices.numpy()
+
+    with open(os.path.join(MODEL_DIR, 'class_mappings.json'), 'r') as f:
+        label_map = json.load(f)
+
+    predicted_labels_with_threshold = []
+    for idx, conf in zip(predictions, max_confidences):
+        if conf.item() >= threshold:
+            predicted_labels_with_threshold.append(label_map[str(idx)])
+        else:
+            predicted_labels_with_threshold.append("-")
+
+    df_predictions = pd.DataFrame({
+        'Accession': accession,
+        'Class_confidence': max_confidences.numpy(),
+        'Predicted_Class': predicted_labels_with_threshold
+    })
+
+    return df_predictions
+
+def predict_subclass(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
+    """
+    Predict the TCDB family (e.g., transporter family) for a set of protein sequences 
+    based on pre-trained embeddings using a multi-class classification model.
+
+    **Parameters:**
+    - `embeddings` (np.ndarray): A numpy array containing the sequence embeddings to be predicted. 
+      Each row corresponds to the embedding of a single protein sequence.
+    - `accession` (list): A list of accession IDs corresponding to the sequences in the embeddings. 
+      Each entry should match the order of the embeddings.
+    - `threshold` (float, optional): The threshold for classifying the predictions. If the predicted confidence is greater than this threshold, 
+      the sequence is assigned a predicted family label, otherwise it is assigned a placeholder ("-"). Default is 0.5.
+
+    **Returns:**
+    - `pd.DataFrame`: A DataFrame with three columns:
+      - `'Accession'`: The accession IDs corresponding to the sequences.
+      - `'Family_confidence'`: The confidence score of the predicted family label.
+      - `'Predicted_Family'`: The predicted TCDB family label for each sequence, or `'-'` if the confidence is below the threshold.
+
+    **Raises:**
+    - `FileNotFoundError`: If the model checkpoint file (`family_650M_deploy.ckpt`) or the mapping file (`family_deploy_mappings.json`) cannot be found.
+    - `ValueError`: If the input `embeddings` array and `accession` list have mismatched lengths.
+
+"""
+    model_path = os.path.join(MODEL_DIR, 'subclass_650M.ckpt')
+
+    model = MLP_subclass.load_from_checkpoint(checkpoint_path = model_path, num_classes_level2=31)  
+    #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    device = torch.device('cpu')
+    model = model.to(device)
+    model.eval() 
+
+    tensor_embeddings = torch.tensor(embeddings, dtype=torch.float32)
+
+    with torch.no_grad():
+        outputs = model(tensor_embeddings)
+        probabilities = F.softmax(outputs, dim=1)  
+
+        max_confidences, best_indices = probabilities.max(dim=1)  
+        predictions = best_indices.numpy()
+
+    with open(os.path.join(MODEL_DIR, 'subclass_mappings.json'), 'r') as f:
+        label_map = json.load(f)
+
+    predicted_labels_with_threshold = []
+    for idx, conf in zip(predictions, max_confidences):
+        if conf.item() >= threshold:
+            predicted_labels_with_threshold.append(label_map[str(idx)])
+        else:
+            predicted_labels_with_threshold.append("-")
+
+    df_predictions = pd.DataFrame({
+        'Accession': accession,
+        'Subclass_confidence': max_confidences.numpy(),
+        'Predicted_Subclass': predicted_labels_with_threshold
+    })
+
+    return df_predictions
+
 
 def predict_family(embeddings: np.ndarray, accession: list, threshold=0.5) -> pd.DataFrame:
     """
@@ -194,7 +313,7 @@ def predict_substrate_classes(embeddings: np.ndarray, accession: list) -> pd.Dat
     
     model_path = os.path.join(MODEL_DIR, 'substrate_multiclass.ckpt')
 
-    model = MLP_substrate.load_from_checkpoint(checkpoint_path = model_path, num_classes_level1=7)  
+    model = MLP_substrate.load_from_checkpoint(checkpoint_path = model_path, num_classes_level3=7)  
     #model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     device = torch.device('cpu')
     model = model.to(device)

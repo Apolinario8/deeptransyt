@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 #from transformers import AutoTokenizer, AutoModelForMaskedLM
 from tqdm import tqdm
+import cobra
 
 def remove_ambiguous_aa(df: pd.DataFrame) -> pd.DataFrame:
     """Preprocessing to replace ambiguous amino acids."""
@@ -76,3 +77,47 @@ def get_chebi_id(family, subfamily, family_to_chebi, subfamily_to_chebi):
 #         associated_chebis = "No CHEBI ID"
 
 #     return new_subfamily, associated_chebis
+
+
+def get_final_label(row, threshold):
+    if row["SubFamily_confidence"] >= threshold:
+        return row["Predicted_SubFamily"]
+    if row["Family_confidence"] >= threshold:
+        return row["Predicted_Family"]
+    if row["Subclass_confidence"] >= threshold:
+        return row["Predicted_Subclass"]
+    if row["Class_confidence"] >= threshold:
+        return row["Predicted_Class"]
+    return "No annotation" 
+
+
+def get_substrates(final_label, family_to_chebi, subfamily_to_chebi):
+    if final_label in subfamily_to_chebi:  
+        return subfamily_to_chebi[final_label]
+    elif final_label in family_to_chebi: 
+        return family_to_chebi[final_label]
+    else:
+        return [] 
+    
+
+def filter_chebi_substrates(df, model, chebi_column="Substrates"):
+    if model is None:
+        raise ValueError("Metabolic model must be provided.")
+
+    model_chebis = set()
+    for met in model.metabolites:
+        if hasattr(met, "_annotation") and isinstance(met._annotation, dict):
+            chebi_ids = met._annotation.get("chebi", [])
+            if isinstance(chebi_ids, list):
+                model_chebis.update(chebi_ids)
+            elif isinstance(chebi_ids, str):
+                model_chebis.add(chebi_ids)
+
+    def filter_valid_substrates(substrates):
+        if isinstance(substrates, str):
+            substrates = substrates.split(", ") 
+        return [s for s in substrates if s in model_chebis]
+
+    df["Valid_Substrates"] = df[chebi_column].apply(filter_valid_substrates)
+
+    return df

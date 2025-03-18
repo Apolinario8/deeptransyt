@@ -1,3 +1,3 @@
-Accession,Binary_Predictions,Family_confidence,Predicted_Family,SubFamily_confidence,Predicted_SubFamily
-b0010,0.9990728,0.999816,2.A.96,0.9996362,2.A.96.1
-b2683,0.9938211,0.9972019,2.A.78,0.18774521,-
+Accession,Binary_Predictions,Class_confidence,Predicted_Class,Subclass_confidence,Predicted_Subclass,Family_confidence,Predicted_Family,SubFamily_confidence,Predicted_SubFamily,Annotation,Substrates,Valid_Substrates
+b0010,0.9990728,0.99987483,2,0.9996896,2.A,0.999816,2.A.96,0.9996362,2.A.96.1,2.A.96.1,"CHEBI:7434, CHEBI:24996, CHEBI:30031, CHEBI:22534, CHEBI:13704","CHEBI:7434, CHEBI:30031, CHEBI:22534, CHEBI:13704"
+b2683,0.9938211,0.99796045,2,0.99871624,2.A,0.9972019,2.A.78,0.18774521,-,2.A.78,"CHEBI:6255, CHEBI:6271, CHEBI:27266, CHEBI:25017, CHEBI:6829, CHEBI:22918","CHEBI:6255, CHEBI:6271, CHEBI:27266, CHEBI:25017, CHEBI:6829"

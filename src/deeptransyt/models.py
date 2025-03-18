@@ -69,7 +69,63 @@ class MLP_multi_output(pl.LightningModule):
         level4_out = self.fc_level4(x)
 
         return level1_out, level2_out, level3_out, level4_out
-    
+
+class MLP_class(pl.LightningModule):
+    def __init__(self, num_classes_level1):
+        super(MLP_class, self).__init__()
+
+        self.fc1 = nn.Linear(1280, 720)
+        self.bn1 = nn.BatchNorm1d(720)
+        self.dropout1 = nn.Dropout(0.1)
+        
+        self.fc2 = nn.Linear(720, 360)
+        self.bn2 = nn.BatchNorm1d(360)
+        self.dropout2 = nn.Dropout(0.1)
+        
+        self.fc_level1 = nn.Linear(360, num_classes_level1)
+
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = self.bn1(x)
+        x = self.dropout1(x)
+
+        x = torch.relu(self.fc2(x))
+        x = self.bn2(x)
+        x = self.dropout2(x)
+
+        level1_out = self.fc_level1(x)
+        return level1_out
+
+class MLP_subclass(pl.LightningModule):
+    def __init__(self, num_classes_level2):
+        super(MLP_subclass, self).__init__()
+
+        self.fc1 = nn.Linear(1280, 720)
+        self.bn1 = nn.BatchNorm1d(720)
+        self.dropout1 = nn.Dropout(0.23)
+        
+        self.fc2 = nn.Linear(720, 360)
+        self.bn2 = nn.BatchNorm1d(360)
+        self.dropout2 = nn.Dropout(0.23)
+        
+        self.fc_level2 = nn.Linear(360, num_classes_level2)
+
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, x):
+        x = torch.relu(self.fc1(x))
+        x = self.bn1(x)
+        x = self.dropout1(x)
+
+        x = torch.relu(self.fc2(x))
+        x = self.bn2(x)
+        x = self.dropout2(x)
+
+        level2_out = self.fc_level2(x)
+        return level2_out
+      
 class MLP_family(pl.LightningModule):
     def __init__(self, num_classes_level3):
         super(MLP_family, self).__init__()
@@ -127,7 +183,7 @@ class MLP_subfamily(pl.LightningModule):
         return level4_out
     
 class MLP_substrate(pl.LightningModule):
-    def __init__(self, num_classes_level1,):
+    def __init__(self, num_classes_level3,):
         super(MLP_substrate, self).__init__()
 
         self.fc1 = nn.Linear(1280, 720)
@@ -138,7 +194,7 @@ class MLP_substrate(pl.LightningModule):
         self.bn2 = nn.BatchNorm1d(360)
         self.dropout2 = nn.Dropout(0.15)
         
-        self.fc_level1 = nn.Linear(360, num_classes_level1)
+        self.fc_level1 = nn.Linear(360, num_classes_level3)
 
         self.criterion = nn.CrossEntropyLoss()
 
